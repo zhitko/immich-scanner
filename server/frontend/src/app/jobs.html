@@ -1,0 +1,59 @@
+<section class="panel">
+  <div class="section-head">
+    <div>
+      <h2>Jobs</h2>
+      <p class="lede">Detection and upload work queued on this server.</p>
+    </div>
+    <div class="filters" role="group" aria-label="Job status">
+      @for (item of statuses; track item) {
+        <button type="button" [class.active]="status() === item" (click)="choose(item)">
+          {{ label(item) }}
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (error()) {
+    <p class="banner warn" role="alert">{{ error() }}</p>
+  }
+
+  @if (jobs() === null) {
+    <p class="muted">Loading jobs…</p>
+  } @else if (jobs()!.length === 0) {
+    <p class="empty">No jobs in this view.</p>
+  } @else {
+    <table>
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Scan</th>
+          <th>Tries</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (job of jobs()!; track job.id) {
+          <tr>
+            <td>{{ formatStamp(job.created_at) }}</td>
+            <td>{{ job.type }}</td>
+            <td>
+              <span class="pill" [attr.data-status]="job.status">{{ job.status }}</span>
+            </td>
+            <td>
+              @if (job.scan_id) {
+                <a [routerLink]="['/scans', job.scan_id]">{{ job.scan_id.slice(0, 8) }}</a>
+              }
+            </td>
+            <td>{{ job.attempts }}</td>
+          </tr>
+          @if (job.error) {
+            <tr>
+              <td colspan="5" class="job-error">{{ job.error }}</td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  }
+</section>
