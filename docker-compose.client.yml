@@ -1,0 +1,28 @@
+# Scanner agent. Run this on the laptop that has the USB flatbed attached.
+#
+#   cp client/.env.example client/.env
+#   docker compose -f docker-compose.client.yml up --build
+#
+# USB: the container is privileged and receives /dev/bus/usb so SANE's genesys
+# backend can open the Canon LiDE 700F. See the README for udev rules.
+services:
+  scanner-client:
+    build:
+      context: ./client
+    image: immich-scanner-client
+    ports:
+      - "8081:8080"
+    env_file:
+      - path: ./client/.env
+        required: false
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - scanner-data:/data
+    privileged: true
+    devices:
+      - "/dev/bus/usb:/dev/bus/usb"
+    restart: unless-stopped
+
+volumes:
+  scanner-data:

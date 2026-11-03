@@ -218,3 +218,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# immich-scanner
+data/
+client/data/
+server/backend/data/
+node_modules/
+dist/
+.angular/
+*.sqlite
+*.sqlite3

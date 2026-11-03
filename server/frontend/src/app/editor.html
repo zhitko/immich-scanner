@@ -1,0 +1,230 @@
+<section class="panel wide">
+  <p class="actions back">
+    <a routerLink="/scans">Back to waiting</a>
+  </p>
+
+  @if (error()) {
+    <p class="banner warn" role="alert">{{ error() }}</p>
+  }
+  @if (notice()) {
+    <p class="banner ok">{{ notice() }}</p>
+  }
+
+  @if (scan(); as scan) {
+    <div class="section-head">
+      <div>
+        <h2>{{ scan.original_filename }}</h2>
+        <p class="lede">
+          {{ scan.width }}×{{ scan.height }}
+          @if (scan.dpi) {
+            · {{ scan.dpi }} dpi
+          }
+          @if (scan.device_name) {
+            · {{ scan.device_name }}
+          }
+        </p>
+      </div>
+      <p class="actions">
+        <button type="button" (click)="addRegion()" [disabled]="busy() || scan.files_deleted">
+          Add photo
+        </button>
+        <button type="button" (click)="redetect()" [disabled]="busy() || scan.files_deleted">
+          Detect again
+        </button>
+        <button
+          type="button"
+          class="primary"
+          (click)="upload()"
+          [disabled]="busy() || scan.files_deleted"
+        >
+          Upload all
+        </button>
+        <button type="button" class="danger" (click)="deleteScan()">Delete scan</button>
+      </p>
+    </div>
+
+    @if (scan.detection_error) {
+      <p class="banner warn">Detection failed: {{ scan.detection_error }}</p>
+    }
+    @if (scan.files_deleted) {
+      <p class="banner">The original file was removed. History and Immich ids are still here.</p>
+    }
+    @if (activeJob(); as job) {
+      <p class="banner">
+        Job {{ job.status }}
+        @if (job.error) {
+          — {{ job.error }}
+        }
+      </p>
+    }
+
+    <div class="editor">
+      <div class="stage">
+        @if (!scan.files_deleted) {
+          <div class="frame" #frame>
+            <img [src]="bedUrl()" alt="Full scanner bed" (load)="redraw()" />
+            <canvas
+              #canvas
+              aria-label="Detected photos. Drag to move, use the corners to resize, and the handle to rotate."
+              (pointerdown)="onPointerDown($event)"
+              (pointermove)="onPointerMove($event)"
+              (pointerup)="onPointerUp()"
+              (pointercancel)="onPointerUp()"
+            ></canvas>
+          </div>
+          <p class="muted">
+            Drag a photo to move it. Corners resize it. The handle above the selected photo rotates
+            it. A dashed outline means the crop changed since the last upload, so the next upload
+            creates a new Immich asset.
+          </p>
+        }
+      </div>
+
+      <aside>
+        @if (selected(); as region) {
+          <h3>Photo {{ region.position }}</h3>
+          <p class="muted">
+            {{ region.upload_status }}
+            @if (region.immich_asset_id) {
+              · {{ region.immich_asset_id }}
+            }
+            @if (region.immich_status) {
+              · {{ region.immich_status }}
+            }
+          </p>
+          @if (region.upload_error) {
+            <p class="banner warn">{{ region.upload_error }}</p>
+          }
+          @if (region.crop_changed) {
+            <p class="banner">This crop differs from the uploaded asset.</p>
+          }
+          @if (!scan.files_deleted) {
+            <img class="crop" [src]="previewUrl(region)" alt="Cropped preview" />
+          }
+          @if (draft(); as draft) {
+            <form (submit)="$event.preventDefault(); saveMetadata()">
+              <label>
+                Date taken
+                <input
+                  type="datetime-local"
+                  [value]="draft.takenAt"
+                  (input)="updateDraft('takenAt', $any($event.target).value)"
+                />
+              </label>
+              <label>
+                Description
+                <textarea
+                  rows="3"
+                  [value]="draft.description"
+                  (input)="updateDraft('description', $any($event.target).value)"
+                ></textarea>
+              </label>
+              <label>
+                Album
+                <select
+                  [value]="draft.albumId"
+                  (change)="updateDraft('albumId', $any($event.target).value)"
+                >
+                  <option value="">None</option>
+                  @for (album of albums(); track album.id) {
+                    <option [value]="album.id">{{ album.name }}</option>
+                  }
+                  @if (draft.albumId && !knownAlbum(draft.albumId)) {
+                    <option [value]="draft.albumId">{{ draft.albumId }}</option>
+                  }
+                </select>
+              </label>
+              <div class="pair">
+                <label>
+                  Latitude
+                  <input
+                    inputmode="decimal"
+                    [value]="draft.latitude"
+                    (input)="updateDraft('latitude', $any($event.target).value)"
+                  />
+                </label>
+                <label>
+                  Longitude
+                  <input
+                    inputmode="decimal"
+                    [value]="draft.longitude"
+                    (input)="updateDraft('longitude', $any($event.target).value)"
+                  />
+                </label>
+              </div>
+              <label class="check">
+                <input
+                  type="checkbox"
+                  [checked]="draft.favorite"
+                  (change)="updateDraft('favorite', $any($event.target).checked)"
+                />
+                Favorite
+              </label>
+              <label>
+                Rating
+                <select
+                  [value]="draft.rating"
+                  (change)="updateDraft('rating', $any($event.target).value)"
+                >
+                  <option value="">None</option>
+                  @for (score of ratings; track score) {
+                    <option [value]="score">{{ score }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                Visibility
+                <select
+                  [value]="draft.visibility"
+                  (change)="updateDraft('visibility', $any($event.target).value)"
+                >
+                  <option value="">Unchanged in Immich</option>
+                  <option value="timeline">Timeline</option>
+                  <option value="archive">Archive</option>
+                  <option value="hidden">Hidden</option>
+                </select>
+              </label>
+              <p class="muted">Orientation turns: {{ region.quarter_turns }}</p>
+              <p class="actions">
+                <button type="submit" class="primary" [disabled]="busy()">Save details</button>
+                <button type="button" (click)="rotate()" [disabled]="busy() || scan.files_deleted">
+                  Rotate 90°
+                </button>
+                <button
+                  type="button"
+                  (click)="upload(region.id)"
+                  [disabled]="busy() || scan.files_deleted"
+                >
+                  Upload this
+                </button>
+                <button type="button" class="danger" (click)="removeRegion()" [disabled]="busy()">
+                  Remove
+                </button>
+              </p>
+            </form>
+          }
+        } @else {
+          <p class="empty">No photos yet. Add one, or run detection again.</p>
+        }
+
+        @if (scan.regions.length) {
+          <ul class="region-list">
+            @for (region of scan.regions; track region.id) {
+              <li>
+                <button
+                  type="button"
+                  [class.active]="region.id === selectedId()"
+                  (click)="select(region.id)"
+                >
+                  {{ region.position }} · {{ region.upload_status }}
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </aside>
+    </div>
+  } @else if (!error()) {
+    <p class="muted">Loading scan…</p>
+  }
+</section>
