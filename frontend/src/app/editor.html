@@ -104,7 +104,7 @@
             <span class="hint-keys">
               Drag to move · corners resize · round handle rotates (<kbd>Shift</kbd> snaps 15°) ·
               drag on empty space to add a photo · <kbd>←</kbd><kbd>→</kbd> switch ·
-              <kbd>R</kbd> rotate · <kbd>Del</kbd> remove · <kbd>Ctrl</kbd>+<kbd>S</kbd> save
+              <kbd>R</kbd> rotate · <kbd>Del</kbd> remove · <kbd>Ctrl</kbd>+<kbd>S</kbd> save locally
             </span>
             <span class="hint-touch">
               Tap a photo to select · drag to move · drag corners to resize · round handle rotates ·
@@ -223,14 +223,27 @@
               </summary>
               <div class="section-body">
                 <form (submit)="$event.preventDefault(); saveMetadata()">
-                  <label>
-                    Date taken
-                    <input
-                      type="datetime-local"
-                      [value]="draft.takenAt"
-                      (input)="updateDraft('takenAt', $any($event.target).value)"
-                    />
-                  </label>
+                  <div class="pair">
+                    <label>
+                      Date taken
+                      <input
+                        type="date"
+                        [value]="draft.takenDate"
+                        (input)="updateDraft('takenDate', $any($event.target).value)"
+                        (change)="updateDraft('takenDate', $any($event.target).value)"
+                      />
+                    </label>
+                    <label>
+                      Time
+                      <input
+                        type="time"
+                        title="Optional. Left empty, the time is saved as midnight."
+                        [value]="draft.takenTime"
+                        (input)="updateDraft('takenTime', $any($event.target).value)"
+                        (change)="updateDraft('takenTime', $any($event.target).value)"
+                      />
+                    </label>
+                  </div>
                   <label>
                     Description
                     <textarea
@@ -317,7 +330,15 @@
                   </label>
                   <div class="actions">
                     <button type="submit" [disabled]="busy() || !dirty()">
-                      {{ dirty() ? 'Save details' : 'Saved' }}
+                      {{ dirty() ? 'Save locally' : 'Saved locally' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="primary"
+                      (click)="upload(region.id)"
+                      [disabled]="!canUpload(region)"
+                    >
+                      {{ uploadLabel(region) }}
                     </button>
                     @if (scan.regions.length > 1) {
                       <button
@@ -331,6 +352,9 @@
                       </button>
                     }
                   </div>
+                  <p class="muted small">
+                    Stored on this computer. Immich is updated only when you upload this photo.
+                  </p>
                 </form>
               </div>
             </details>
@@ -341,7 +365,7 @@
               type="button"
               class="primary"
               (click)="upload(region.id)"
-              [disabled]="busy() || scan.files_deleted || !region.needs_upload || uploading()"
+              [disabled]="!canUpload(region)"
             >
               {{ uploadLabel(region) }}
             </button>

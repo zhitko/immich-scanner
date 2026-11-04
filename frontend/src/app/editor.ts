@@ -30,10 +30,11 @@ import {
   TOUCH_TOLERANCE_PX,
 } from './geometry';
 import { Album, Region, RegionMetadata, ScanDetail } from './models';
-import { formatStamp, fromDatetimeLocal, toDatetimeLocal } from './time';
+import { formatStamp, fromDateAndTime, toDateAndTime } from './time';
 
 interface Draft {
-  takenAt: string;
+  takenDate: string;
+  takenTime: string;
   description: string;
   albumId: string;
   latitude: string;
@@ -215,14 +216,26 @@ export class EditorPage {
     return '';
   }
 
+  /** Local edits can be uploaded before they are saved; upload stores them first. */
+  canUpload(region: Region): boolean {
+    const scan = this.scan();
+    if (!scan || scan.files_deleted || this.busy() || this.uploading()) {
+      return false;
+    }
+    return this.dirty() || region.needs_upload;
+  }
+
   uploadLabel(region: Region): string {
+    if (region.upload_status === 'uploading') {
+      return 'Uploading…';
+    }
     if (region.upload_status === 'failed') {
       return 'Retry upload';
     }
-    if (region.upload_status === 'uploaded') {
-      return region.needs_upload ? 'Upload changes' : 'Uploaded';
+    if (region.upload_status === 'uploaded' && !region.needs_upload && !this.dirty()) {
+      return 'Uploaded';
     }
-    return 'Upload this photo';
+    return 'Upload to Immich';
   }
 
   jobMessage(job: ActiveJob): string {
@@ -446,7 +459,7 @@ export class EditorPage {
     }
     this.run(this.flushDraft(), (ok) => {
       if (ok) {
-        this.flash('Details saved.');
+        this.flash('Saved locally.');
       }
     });
   }
@@ -846,8 +859,10 @@ function sameRect(a: Rect, b: Rect): boolean {
 }
 
 function draftFrom(region: Region): Draft {
+  const taken = toDateAndTime(region.taken_at);
   return {
-    takenAt: toDatetimeLocal(region.taken_at),
+    takenDate: taken.date,
+    takenTime: taken.time,
     description: region.description,
     albumId: region.album_id ?? '',
     latitude: region.latitude === null ? '' : String(region.latitude),
@@ -874,7 +889,7 @@ function metadataFrom(draft: Draft): RegionMetadata | null {
   }
   const visibility = draft.visibility;
   return {
-    taken_at: fromDatetimeLocal(draft.takenAt),
+    taken_at: fromDateAndTime(draft.takenDate, draft.takenTime),
     description: draft.description,
     album_id: draft.albumId || null,
     latitude: lat,

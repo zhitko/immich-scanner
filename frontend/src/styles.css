@@ -868,6 +868,10 @@ select:disabled {
 textarea {
   resize: vertical;
 }
+input[type='date'],
+input[type='time'] {
+  min-width: 0;
+}
 .pair {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -36,6 +36,29 @@ export function fromDatetimeLocal(value: string): string | null {
   return `${day}T${clock}${sign}${hours}:${minutes}`;
 }
 
+/** Date and optional time from a stored instant. Time is blank when nothing is stored. */
+export function toDateAndTime(value: string | null): { date: string; time: string } {
+  const local = toDatetimeLocal(value);
+  if (!local) {
+    return { date: '', time: '' };
+  }
+  const [date, time] = local.split('T');
+  return { date: date ?? '', time: time ?? '' };
+}
+
+/**
+ * A date can be saved without a time. A blank time is midnight on that date.
+ * A blank date clears the instant, even if a time is filled in.
+ */
+export function fromDateAndTime(date: string, time: string): string | null {
+  const day = date.trim();
+  if (!day) {
+    return null;
+  }
+  const clock = time.trim() || '00:00';
+  return fromDatetimeLocal(`${day}T${clock}`);
+}
+
 export function formatStamp(value: string | null): string {
   if (!value) {
     return '';
