@@ -1134,21 +1134,39 @@ details.section[open] > summary {
   margin: 0;
 }
 .crop-box {
-  position: relative;
   display: grid;
-  place-items: center;
+  justify-items: center;
+  width: 100%;
+}
+.crop-ratio {
+  --aspect: 1;
+  --turns: 0;
+  container-type: size;
+  position: relative;
+  width: min(100%, calc(320px * var(--aspect)));
+  aspect-ratio: var(--aspect);
   border-radius: var(--radius);
   background: var(--bed);
   overflow: hidden;
 }
 .crop {
-  display: block;
-  width: 100%;
-  max-height: 320px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100cqi;
+  height: 100cqb;
+  max-height: none;
   object-fit: contain;
+  transform: translate(-50%, -50%) rotate(calc(var(--turns) * 90deg));
+  transform-origin: center;
+}
+.crop-ratio.odd .crop {
+  width: 100cqb;
+  height: 100cqi;
 }
 .crop-tools {
   position: absolute;
+  z-index: 1;
   right: 10px;
   bottom: 10px;
   display: flex;

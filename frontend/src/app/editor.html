@@ -175,34 +175,41 @@
               <summary>Preview</summary>
               <div class="section-body">
                 <div class="crop-box">
-                  <img class="crop" [src]="previewUrl(region)" alt="Straightened crop" />
-                  <div class="crop-tools">
-                    <button
-                      type="button"
-                      class="icon"
-                      title="Rotate left (Shift+R)"
-                      aria-label="Rotate left"
-                      (click)="rotate(false)"
-                      [disabled]="busy()"
-                    >
-                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                        <path d="M3 3v5h5" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      class="icon"
-                      title="Rotate right (R)"
-                      aria-label="Rotate right"
-                      (click)="rotate(true)"
-                      [disabled]="busy()"
-                    >
-                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
-                        <path d="M21 3v5h-5" />
-                      </svg>
-                    </button>
+                  <div
+                    class="crop-ratio"
+                    [class.odd]="region.quarter_turns % 2 === 1"
+                    [style.--aspect]="frameAspect(region)"
+                    [style.--turns]="region.quarter_turns % 4"
+                  >
+                    <img class="crop" [src]="previewUrl(region)" alt="Straightened crop" />
+                    <div class="crop-tools">
+                      <button
+                        type="button"
+                        class="icon"
+                        title="Rotate left (Shift+R)"
+                        aria-label="Rotate left"
+                        (click)="rotate(false)"
+                        [disabled]="busy()"
+                      >
+                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        class="icon"
+                        title="Rotate right (R)"
+                        aria-label="Rotate right"
+                        (click)="rotate(true)"
+                        [disabled]="busy()"
+                      >
+                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                          <path d="M21 3v5h-5" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

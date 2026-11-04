@@ -33,6 +33,7 @@ import {
   TOUCH_TOLERANCE_PX,
 } from './geometry';
 import { Album, Region, RegionMetadata, ScanDetail } from './models';
+import { displayedAspect, previewCacheKey } from './preview';
 import { formatStamp, fromDateAndTime, toDateAndTime } from './time';
 
 interface Draft {
@@ -129,6 +130,8 @@ export class EditorPage {
   private readonly frame = viewChild<ElementRef<HTMLElement>>('frame');
   private readonly scanId = signal<string | null>(null);
   private noticeTimer = 0;
+  /** Bumped on local edits so an in-flight scan reload cannot roll them back. */
+  private scanRevision = 0;
 
   constructor() {
     const destroyRef = inject(DestroyRef);
@@ -174,7 +177,11 @@ export class EditorPage {
 
   previewUrl(region: Region): string {
     const scan = this.scan();
-    return scan ? this.api.regionPreviewUrl(scan.id, region.id, region.updated_at) : '';
+    return scan ? this.api.regionPreviewUrl(scan.id, region.id, previewCacheKey(region)) : '';
+  }
+
+  frameAspect(region: Region): number {
+    return displayedAspect(region.width, region.height, region.quarter_turns);
   }
 
   bedUrl(): string {
@@ -545,6 +552,7 @@ export class EditorPage {
     }
     const index = this.selectedIndex();
     this.run(this.api.deleteRegion(scan.id, region.id), () => {
+      this.noteEdit();
       this.scan.update((current) =>
         current
           ? {
@@ -653,15 +661,23 @@ export class EditorPage {
   }
 
   private insertRegion(region: Region): void {
-    this.scan.update((current) =>
-      current
-        ? {
-            ...current,
-            regions: [...current.regions, region],
-            region_count: current.region_count + 1,
-          }
-        : current,
-    );
+    this.noteEdit();
+    this.scan.update((current) => {
+      if (!current) {
+        return current;
+      }
+      if (current.regions.some((item) => item.id === region.id)) {
+        return {
+          ...current,
+          regions: current.regions.map((item) => (item.id === region.id ? region : item)),
+        };
+      }
+      return {
+        ...current,
+        regions: [...current.regions, region],
+        region_count: current.region_count + 1,
+      };
+    });
     this.selectNow(region.id);
   }
 
@@ -673,9 +689,19 @@ export class EditorPage {
 
   private load(id: string): void {
     this.error.set('');
+    const revision = this.scanRevision;
     this.api.getScan(id).subscribe({
-      next: (scan) => this.applyScan(scan),
-      error: (error: unknown) => this.error.set(httpError(error)),
+      next: (scan) => {
+        if (revision !== this.scanRevision || this.scanId() !== id) {
+          return;
+        }
+        this.applyScan(scan);
+      },
+      error: (error: unknown) => {
+        if (this.scanId() === id) {
+          this.error.set(httpError(error));
+        }
+      },
     });
   }
 
@@ -684,8 +710,14 @@ export class EditorPage {
     if (!id || this.drag()) {
       return;
     }
+    const revision = this.scanRevision;
     this.api.getScan(id).subscribe({
-      next: (scan) => this.applyScan(scan),
+      next: (scan) => {
+        if (revision !== this.scanRevision || this.scanId() !== id) {
+          return;
+        }
+        this.applyScan(scan);
+      },
       error: () => undefined,
     });
   }
@@ -704,6 +736,7 @@ export class EditorPage {
   }
 
   private replaceRegion(region: Region): void {
+    this.noteEdit();
     this.scan.update((scan) =>
       scan
         ? { ...scan, regions: scan.regions.map((item) => (item.id === region.id ? region : item)) }
@@ -714,6 +747,10 @@ export class EditorPage {
       this.dirty.set(false);
     }
     this.error.set('');
+  }
+
+  private noteEdit(): void {
+    this.scanRevision += 1;
   }
 
   private poll(): void {
