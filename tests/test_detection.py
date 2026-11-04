@@ -47,6 +47,42 @@ def test_white_print_on_a_white_lid_is_kept_because_of_its_edge() -> None:
     assert abs(regions[0].center_y - 420) < 20
 
 
+def test_white_paper_margin_is_trimmed_from_the_crop() -> None:
+    image = np.full((1400, 1000, 3), 248, np.uint8)
+    paper, edge = (236, 234, 228), (150, 150, 150)
+    for center, angle in (((330, 380), -4), ((620, 1000), 9)):
+        paint_photo(image, paper, center, (420, 300), angle, border=3, border_color=edge)
+        paint_photo(image, (70, 60, 55), center, (380, 260), angle, border=0)
+    regions = OpenCvPhotoDetector().detect(image)
+    assert len(regions) == 2
+    for region in regions:
+        assert abs(region.width - 380) < 10
+        assert abs(region.height - 260) < 10
+        cropped = crop_rotated_rect(
+            image, region.center_x, region.center_y, region.width, region.height, region.angle_deg
+        )
+        edges = np.concatenate(
+            [
+                cropped[:3].reshape(-1, 3),
+                cropped[-3:].reshape(-1, 3),
+                cropped[:, :3].reshape(-1, 3),
+                cropped[:, -3:].reshape(-1, 3),
+            ]
+        )
+        assert (edges.mean(axis=1) > 180).mean() < 0.02
+
+
+def test_light_picture_without_a_margin_keeps_the_whole_print() -> None:
+    image = np.full((1000, 900, 3), 248, np.uint8)
+    edge = (150, 150, 150)
+    paint_photo(image, (232, 230, 226), (450, 500), (500, 380), 3, border=3, border_color=edge)
+    paint_photo(image, (60, 50, 45), (450, 520), (160, 200), 3, border=0)
+    regions = OpenCvPhotoDetector().detect(image)
+    assert len(regions) == 1
+    assert abs(regions[0].width - 500) < 10
+    assert abs(regions[0].height - 380) < 10
+
+
 def test_crops_keep_the_print_orientation() -> None:
     photos = [
         {"color": (180, 40, 50), "center": (300, 260), "size": (360, 220), "angle": 0},
