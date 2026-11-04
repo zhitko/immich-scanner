@@ -9,9 +9,9 @@ Image.MAX_IMAGE_PIXELS = 400_000_000
 def load_rgb(path: Path) -> tuple[np.ndarray, int | None]:
     with Image.open(path) as image:
         dpi = _dpi(image)
-        if image.mode == "I;16":
-            array = np.array(image, dtype=np.uint16)
-            eight = (array / 256).astype(np.uint8)
+        if image.mode.startswith("I;16") or image.mode == "I":
+            array = np.asarray(image).astype(np.uint32)
+            eight = np.clip(array >> 8, 0, 255).astype(np.uint8)
             return np.stack([eight, eight, eight], axis=-1), dpi
         return np.array(image.convert("RGB")), dpi
 

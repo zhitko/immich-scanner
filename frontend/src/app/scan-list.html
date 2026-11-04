@@ -1,23 +1,47 @@
 <section class="panel">
   @if (mode() === 'open') {
-    <div class="scan-bar">
-      <div>
-        <p class="lamp" [attr.data-state]="scanner()?.scanner_found ? 'ok' : 'bad'">
+    <div class="scan-bar" [attr.data-state]="lampState()">
+      <div class="scan-status">
+        <p class="lamp" [attr.data-state]="lampState()">
+          <span class="lamp-dot" aria-hidden="true"></span>
           {{ scanner()?.scanner_message || 'Checking the scanner…' }}
         </p>
-        <p class="muted">{{ scanner()?.phase_message || 'Idle' }}</p>
-        @if (scanner()?.last_scan_message) {
-          <p [class]="scanner()?.last_scan_ok ? 'banner ok' : 'banner warn'">
-            {{ scanner()!.last_scan_message }}
-            @if (scanner()?.last_scan_ok && scanner()?.last_scan_id) {
-              <a [routerLink]="['/scans', scanner()!.last_scan_id]">Open it</a>
+        @if (scanning()) {
+          <p class="phase">
+            <span class="spinner" aria-hidden="true"></span>
+            {{ scanner()?.phase === 'idle' ? 'Starting…' : scanner()?.phase_message }}
+            @if (elapsed()) {
+              <span class="muted">{{ elapsed() }}</span>
             }
           </p>
+        } @else if (scanner()?.last_scan_message) {
+          <p class="phase" [attr.data-tone]="scanner()?.last_scan_ok ? 'ok' : 'bad'" role="status">
+            {{ scanner()!.last_scan_message }}
+            @if (scanner()?.last_scan_ok && scanner()?.last_scan_id) {
+              <a [routerLink]="['/scans', scanner()!.last_scan_id]">Review now →</a>
+            }
+          </p>
+        } @else {
+          <p class="phase muted">Put the photos face down on the glass, a few millimetres apart.</p>
         }
       </div>
-      <button type="button" class="primary" [disabled]="scanning()" (click)="scan()">
-        {{ scanning() ? 'Scanning…' : 'Scan bed' }}
-      </button>
+      <div class="scan-actions">
+        <button type="button" class="primary big" [disabled]="scanning()" (click)="scan()">
+          @if (scanning()) {
+            <span class="spinner" aria-hidden="true"></span> Scanning…
+          } @else {
+            Scan bed
+          }
+        </button>
+        <label class="check small">
+          <input
+            type="checkbox"
+            [checked]="autoOpen()"
+            (change)="toggleAutoOpen($any($event.target).checked)"
+          />
+          Open for review when done
+        </label>
+      </div>
     </div>
   }
 
@@ -41,33 +65,57 @@
   @if (scans() === null) {
     <p class="muted">Loading scans…</p>
   } @else if (scans()!.length === 0) {
-    <p class="empty">Nothing here yet. Put the photos on the glass and scan the bed.</p>
+    <p class="empty">
+      @if (mode() === 'open') {
+        Nothing waiting. Put the photos on the glass and press “Scan bed”.
+      } @else {
+        No finished scans yet.
+      }
+    </p>
   } @else {
     <ul class="cards">
       @for (scan of scans()!; track scan.id) {
         <li class="card">
-          <a class="thumb" [routerLink]="['/scans', scan.id]">
+          <a class="thumb" [routerLink]="['/scans', scan.id]" aria-label="Open scan">
             @if (!scan.files_deleted) {
-              <img [src]="previewUrl(scan)" alt="" />
+              <img [src]="previewUrl(scan)" alt="" loading="lazy" />
             } @else {
               <span>File removed</span>
             }
           </a>
           <div class="card-body">
-            <a [routerLink]="['/scans', scan.id]"
-              ><strong>{{ formatStamp(scan.created_at) }}</strong></a
-            >
-            <p class="muted">
-              {{ scan.region_count }} photos · {{ scan.uploaded_count }} uploaded
+            <a class="card-title" [routerLink]="['/scans', scan.id]">
+              {{ formatStamp(scan.created_at) }}
+            </a>
+            <p class="card-meta">
+              <span
+                class="chip"
+                [attr.data-tone]="
+                  scan.detecting
+                    ? 'busy'
+                    : scan.uploaded_count && scan.uploaded_count === scan.region_count
+                      ? 'ok'
+                      : scan.region_count === 0
+                        ? 'warn'
+                        : ''
+                "
+              >
+                @if (scan.detecting) {
+                  <span class="spinner" aria-hidden="true"></span>
+                }
+                {{ progress(scan) }}
+              </span>
               @if (scan.dpi) {
-                · {{ scan.dpi }} dpi
+                <span class="muted small">{{ scan.dpi }} dpi</span>
               }
             </p>
             @if (scan.detection_error) {
-              <p class="banner warn">{{ scan.detection_error }}</p>
+              <p class="banner warn small">{{ scan.detection_error }}</p>
             }
-            <p class="actions">
-              <a class="button" [routerLink]="['/scans', scan.id]">Open</a>
+            <div class="actions">
+              <a class="button primary" [routerLink]="['/scans', scan.id]">
+                {{ mode() === 'open' ? 'Review' : 'Open' }}
+              </a>
               @if (mode() === 'uploaded' && !scan.files_deleted) {
                 <button type="button" [disabled]="busyId() === scan.id" (click)="deleteFiles(scan)">
                   Free disk space
@@ -79,9 +127,9 @@
                 [disabled]="busyId() === scan.id"
                 (click)="deleteScan(scan)"
               >
-                Delete scan
+                Delete
               </button>
-            </p>
+            </div>
           </div>
         </li>
       }

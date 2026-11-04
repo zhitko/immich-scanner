@@ -77,9 +77,10 @@ To serve the built UI from the API instead of `ng serve`, run `npm run build` in
 
 The desk is one Angular app:
 
-- **Waiting** shows whether the scanner is reachable and scans the bed. The list holds scans that are not fully uploaded. Open one to see the bed with the detected regions drawn on top.
-- Drag a region to move it, drag a corner to resize it, and drag the handle above the selection to rotate it. Add a region, delete one, or run detection again. Detection replaces only regions that have not been uploaded.
-- Each photo has a date taken, description, album, location, favorite flag, rating, and visibility. The date is written into EXIF and sent to Immich. Rotate by 90° clockwise when a print is sideways. The crop preview is the straightened photo.
+- **Waiting** shows whether the scanner is reachable and scans the bed, with the elapsed time while it runs. "Open for review when done" jumps straight to the new scan. The list holds scans that are not fully uploaded and shows which ones are still being detected.
+- Open a scan to see the bed with the detected regions drawn on top. Drag a region to move it, drag a corner to resize it, and drag the round handle to rotate it (Shift snaps to 15°). Drag on an empty part of the bed to outline a photo the detector missed. Detection again replaces only regions that have not been uploaded, and skips photos that are already uploaded.
+- Each photo has a date taken, description, album, location, favorite flag, rating, and visibility. "Copy to all photos" copies the date, album, and location to the rest of the scan. Pasting `lat, lon` into the latitude field fills both. Unsaved details are saved before switching photos or uploading. The date is written into EXIF and sent to Immich. Rotate by 90° either way when a print is sideways. The crop preview is the straightened photo.
+- Keyboard: <kbd>←</kbd>/<kbd>→</kbd> switch photos, <kbd>R</kbd>/<kbd>Shift</kbd>+<kbd>R</kbd> rotate, <kbd>Delete</kbd> removes, <kbd>Ctrl</kbd>+<kbd>S</kbd> saves.
 - **Upload** writes a full-resolution JPEG (quality from settings, default 95, 4:4:4) or a PNG, then creates the Immich asset, adds it to the album, and updates the metadata. A failed photo can be retried. If the crop changed after a successful upload, the next upload creates a new asset and leaves the previous one in Immich.
 - **Uploaded** keeps the history, including Immich asset ids, and can delete the original scan file to free disk space.
 - **Jobs** shows queued, running, finished, and failed detection and upload work.
@@ -93,7 +94,9 @@ The Immich API key needs `asset.upload`, `asset.update`, `album.read`, and `albu
 
 A scan writes the bed into the data directory and queues detection. Jobs live in the same SQLite database as the scans (`jobs` table, WAL). One worker thread in the API process claims the oldest queued job. A job left in `running` after a crash is queued again on startup. Redis or Celery would only add another service for a laptop that already persists everything in SQLite.
 
-Detection downscales the bed, flood-fills whichever lid color is on the border, and turns the remaining contours into minimum-area rectangles. Specks are ignored. The close kernel stays smaller than a 5 mm gap so neighbouring prints are not merged. The detector is the `PhotoDetector` protocol; `OpenCvPhotoDetector` is the implementation used by the app.
+Detection downscales the bed, flood-fills whichever lid color is on the border, and turns the remaining contours into minimum-area rectangles. Each rectangle is expressed with its smallest tilt (within ±45°), so a landscape print stays landscape whatever angle convention the installed OpenCV uses. Specks and thin non-rectangular shapes, such as an edge shadow, are ignored.
+
+The scanner is opened by one process at a time. Device checks and scans share a lock, status polls answer from the last check while the device is in use, and a scan that hits "Device busy" is retried a few times. The close kernel stays smaller than a 5 mm gap so neighbouring prints are not merged. The detector is the `PhotoDetector` protocol; `OpenCvPhotoDetector` is the implementation used by the app.
 
 ## Immich
 
@@ -119,4 +122,4 @@ GitHub Actions runs those checks and builds the compose file, including the mock
 
 ## What this environment did not prove
 
-A real LiDE 700F and a real Immich server were not attached here. Low-contrast prints with no edge against the lid will not be detected; draw a region for those. Running detection again can leave an uploaded region overlapping a newly found one. The worker is a single thread, and only one scan runs at a time.
+A real LiDE 700F and a real Immich server were not attached here. Low-contrast prints with no edge against the lid will not be detected; draw a region for those. Prints that touch each other are found as one region; leave a few millimetres between them. The worker is a single thread, and only one scan runs at a time.

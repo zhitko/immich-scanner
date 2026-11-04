@@ -1,159 +1,210 @@
 <section class="panel narrow">
-  <h2>Scanner and Immich</h2>
-  <p class="lede">
-    This computer scans the bed, then uploads each crop to Immich. The key needs permission to
-    upload assets, update them, read albums, and add assets to an album.
-  </p>
+  <h2>Settings</h2>
+  <p class="lede">Scanner options and where the photos go.</p>
 
   @if (error()) {
     <p class="banner warn" role="alert">{{ error() }}</p>
   }
-  @if (notice()) {
-    <p class="banner ok">{{ notice() }}</p>
-  }
 
   @if (settings(); as settings) {
     <form (submit)="$event.preventDefault(); save()">
-      <h3>Scanner</h3>
-      <p class="muted">{{ scannerMessage() }}</p>
-      <label>
-        Device
-        <select
-          [value]="settings.device_name"
-          (change)="update('device_name', $any($event.target).value)"
+      <fieldset class="group">
+        <legend>Scanner</legend>
+        <p
+          class="lamp small"
+          [attr.data-state]="scannerFound() ? 'ok' : scannerFound() === false ? 'bad' : 'unknown'"
         >
-          <option value="">Default device</option>
-          @for (device of devices(); track device.name) {
-            <option [value]="device.name">{{ device.description }}</option>
-          }
-          @if (settings.device_name && !knownDevice(settings.device_name)) {
-            <option [value]="settings.device_name">{{ settings.device_name }}</option>
-          }
-        </select>
-      </label>
-      <label>
-        Resolution (dpi)
-        <input
-          type="number"
-          min="50"
-          max="4800"
-          [value]="settings.resolution_dpi"
-          (input)="setResolution($any($event.target).value)"
-        />
-      </label>
-      <div class="pair">
+          <span class="lamp-dot" aria-hidden="true"></span>
+          {{ scannerMessage() || 'Checking the scanner…' }}
+        </p>
         <label>
-          Format
+          Device
+          <select
+            [value]="settings.device_name"
+            (change)="update('device_name', $any($event.target).value)"
+          >
+            <option value="">First scanner found</option>
+            @for (device of devices(); track device.name) {
+              <option [value]="device.name">{{ device.description }} ({{ device.name }})</option>
+            }
+            @if (settings.device_name && !knownDevice(settings.device_name)) {
+              <option [value]="settings.device_name">
+                {{ settings.device_name }} (not connected)
+              </option>
+            }
+          </select>
+        </label>
+        <div class="pair">
+          <label>
+            Resolution (dpi)
+            <input
+              type="number"
+              min="50"
+              max="4800"
+              list="resolutions"
+              [value]="settings.resolution_dpi"
+              (input)="setResolution($any($event.target).value)"
+            />
+            <datalist id="resolutions">
+              @for (dpi of resolutions; track dpi) {
+                <option [value]="dpi"></option>
+              }
+            </datalist>
+          </label>
+          <label>
+            Mode
+            <select
+              [value]="settings.scan_mode"
+              (change)="update('scan_mode', $any($event.target).value)"
+            >
+              <option value="Color">Color</option>
+              <option value="Gray">Grayscale</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">
+          300 dpi is fine for viewing on screens; 600 dpi keeps enough detail to print or zoom in
+          and takes about four times longer.
+        </p>
+        <label>
+          Scan file format
           <select
             [value]="settings.scan_format"
             (change)="update('scan_format', $any($event.target).value)"
           >
-            <option value="tiff">TIFF</option>
-            <option value="png">PNG</option>
+            <option value="tiff">TIFF (lossless)</option>
+            <option value="png">PNG (lossless, smaller)</option>
           </select>
         </label>
-        <label>
-          Mode
-          <select
-            [value]="settings.scan_mode"
-            (change)="update('scan_mode', $any($event.target).value)"
-          >
-            <option value="Color">Color</option>
-            <option value="Gray">Gray</option>
-          </select>
-        </label>
-      </div>
-      <div class="pair">
-        <label>
-          Width (mm, optional)
-          <input
-            type="number"
-            min="1"
-            max="400"
-            step="0.1"
-            placeholder="Full bed"
-            [value]="settings.width_mm ?? ''"
-            (input)="setMillimetres('width_mm', $any($event.target).value)"
-          />
-        </label>
-        <label>
-          Height (mm, optional)
-          <input
-            type="number"
-            min="1"
-            max="400"
-            step="0.1"
-            placeholder="Full bed"
-            [value]="settings.height_mm ?? ''"
-            (input)="setMillimetres('height_mm', $any($event.target).value)"
-          />
-        </label>
-      </div>
-      <p class="muted">Leave width and height empty to scan the whole bed. A LiDE 700F is about 216 × 297 mm.</p>
+        <div class="pair">
+          <label>
+            Scan width (mm)
+            <input
+              type="number"
+              min="1"
+              max="400"
+              step="0.1"
+              placeholder="Full bed"
+              [value]="settings.width_mm ?? ''"
+              (input)="setMillimetres('width_mm', $any($event.target).value)"
+            />
+          </label>
+          <label>
+            Scan height (mm)
+            <input
+              type="number"
+              min="1"
+              max="400"
+              step="0.1"
+              placeholder="Full bed"
+              [value]="settings.height_mm ?? ''"
+              (input)="setMillimetres('height_mm', $any($event.target).value)"
+            />
+          </label>
+        </div>
+        <p class="hint">Leave empty to scan the whole bed (A4 flatbeds are about 216 × 297 mm).</p>
+      </fieldset>
 
-      <h3>Immich</h3>
-      <label>
-        Immich URL
-        <input
-          [value]="settings.immich_base_url"
-          (input)="update('immich_base_url', $any($event.target).value)"
-          placeholder="http://immich.home:2283"
-          autocomplete="off"
-        />
-      </label>
-      <label>
-        API key
-        <input
-          [type]="revealKey() ? 'text' : 'password'"
-          [value]="settings.immich_api_key"
-          (input)="update('immich_api_key', $any($event.target).value)"
-          autocomplete="off"
-        />
-      </label>
-      <p class="actions">
-        <button type="button" (click)="revealKey.set(!revealKey())">
-          {{ revealKey() ? 'Hide key' : 'Show key' }}
-        </button>
-      </p>
-      <label>
-        Default album
-        <select
-          [value]="settings.default_album_id"
-          (change)="update('default_album_id', $any($event.target).value)"
-        >
-          <option value="">None</option>
-          @for (album of albums(); track album.id) {
-            <option [value]="album.id">{{ album.name }} ({{ album.asset_count }})</option>
+      <fieldset class="group">
+        <legend>Immich</legend>
+        <label>
+          Server URL
+          <input
+            type="url"
+            [value]="settings.immich_base_url"
+            (input)="update('immich_base_url', $any($event.target).value)"
+            placeholder="http://immich.home:2283"
+            autocomplete="off"
+          />
+        </label>
+        <label>
+          API key
+          <span class="input-row">
+            <input
+              [type]="revealKey() ? 'text' : 'password'"
+              [value]="settings.immich_api_key"
+              (input)="update('immich_api_key', $any($event.target).value)"
+              autocomplete="off"
+            />
+            <button type="button" (click)="revealKey.set(!revealKey())">
+              {{ revealKey() ? 'Hide' : 'Show' }}
+            </button>
+          </span>
+        </label>
+        <p class="hint">
+          Create the key in Immich under Account settings → API keys. It needs
+          <code>asset.upload</code>, <code>asset.update</code>, <code>album.read</code>, and
+          <code>albumAsset.create</code>.
+        </p>
+        <div class="actions">
+          <button
+            type="button"
+            [disabled]="busy() || !settings.immich_base_url || !settings.immich_api_key"
+            (click)="test()"
+          >
+            Test connection
+          </button>
+          @if (connection(); as result) {
+            <span class="phase small" [attr.data-tone]="result.ok ? 'ok' : 'bad'">
+              {{ result.ok ? '✓' : '✗' }} {{ result.message }}
+            </span>
           }
-          @if (settings.default_album_id && !knownAlbum(settings.default_album_id)) {
-            <option [value]="settings.default_album_id">{{ settings.default_album_id }}</option>
-          }
-        </select>
-      </label>
-      <label>
-        Crop format
-        <select
-          [value]="settings.output_format"
-          (change)="update('output_format', $any($event.target).value)"
-        >
-          <option value="jpeg">JPEG</option>
-          <option value="png">PNG</option>
-        </select>
-      </label>
-      <label>
-        JPEG quality
-        <input
-          type="number"
-          min="80"
-          max="100"
-          [value]="settings.jpeg_quality"
-          (input)="setQuality($any($event.target).value)"
-        />
-      </label>
-      <p class="actions">
-        <button type="submit" class="primary" [disabled]="busy()">Save</button>
-        <button type="button" [disabled]="busy()" (click)="test()">Test connection</button>
-      </p>
+        </div>
+        <label>
+          Default album for new photos
+          <select
+            [value]="settings.default_album_id"
+            (change)="update('default_album_id', $any($event.target).value)"
+          >
+            <option value="">No album</option>
+            @for (album of albums(); track album.id) {
+              <option [value]="album.id">{{ album.name }} ({{ album.asset_count }})</option>
+            }
+            @if (settings.default_album_id && !knownAlbum(settings.default_album_id)) {
+              <option [value]="settings.default_album_id">{{ settings.default_album_id }}</option>
+            }
+          </select>
+        </label>
+        @if (!albums().length && settings.immich_base_url) {
+          <p class="hint">Save the URL and key to load your albums.</p>
+        }
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>Uploaded files</legend>
+        <div class="pair">
+          <label>
+            Format
+            <select
+              [value]="settings.output_format"
+              (change)="update('output_format', $any($event.target).value)"
+            >
+              <option value="jpeg">JPEG</option>
+              <option value="png">PNG (lossless, large)</option>
+            </select>
+          </label>
+          <label>
+            JPEG quality
+            <input
+              type="number"
+              min="80"
+              max="100"
+              [disabled]="settings.output_format !== 'jpeg'"
+              [value]="settings.jpeg_quality"
+              (input)="setQuality($any($event.target).value)"
+            />
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="save-bar">
+        <button type="submit" class="primary" [disabled]="busy() || !dirty()">Save settings</button>
+        @if (dirty()) {
+          <span class="muted small">Unsaved changes</span>
+        } @else if (notice()) {
+          <span class="phase small" data-tone="ok" role="status">✓ {{ notice() }}</span>
+        }
+      </div>
     </form>
   } @else if (!error()) {
     <p class="muted">Loading settings…</p>

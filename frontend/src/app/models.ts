@@ -23,6 +23,7 @@ export interface Region {
   upload_error: string | null;
   uploaded_at: string | null;
   crop_changed: boolean;
+  needs_upload: boolean;
   updated_at: string;
 }
 
@@ -36,6 +37,7 @@ export interface ScanSummary {
   upload_state: string;
   files_deleted: boolean;
   detection_error: string | null;
+  detecting: boolean;
   region_count: number;
   uploaded_count: number;
   original_filename: string;
@@ -78,8 +80,9 @@ export interface ScannerDevice {
 }
 
 export interface ScannerStatus {
-  phase: 'idle' | 'scanning';
+  phase: 'idle' | 'scanning' | 'saving';
   phase_message: string;
+  phase_started_at: string | null;
   scanner_found: boolean;
   scanner_message: string;
   devices: ScannerDevice[];

@@ -8,8 +8,9 @@ import numpy as np
 class DetectedRegion:
     """Rotated rectangle in original-image pixels.
 
-    `angle_deg` uses OpenCV's minAreaRect convention: degrees, counter-clockwise
-    positive, typically in the range [-90, 0).
+    `angle_deg` is clockwise-positive with the Y axis pointing down, the same
+    as OpenCV `boxPoints` and canvas `rotate`. Detectors return it in
+    (-45, 45] so `width` follows the side closest to horizontal.
     """
 
     center_x: float

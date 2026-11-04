@@ -13,11 +13,15 @@ export class SettingsPage {
   readonly settings = signal<Settings | null>(null);
   readonly albums = signal<Album[]>([]);
   readonly devices = signal<ScannerDevice[]>([]);
+  readonly scannerFound = signal<boolean | null>(null);
   readonly scannerMessage = signal('');
   readonly error = signal('');
   readonly notice = signal('');
+  readonly connection = signal<{ ok: boolean; message: string } | null>(null);
   readonly busy = signal(false);
+  readonly dirty = signal(false);
   readonly revealKey = signal(false);
+  readonly resolutions = [150, 300, 600, 1200];
 
   constructor() {
     this.api.getSettings().subscribe({
@@ -30,6 +34,7 @@ export class SettingsPage {
     this.api.scannerStatus().subscribe({
       next: (status) => {
         this.devices.set(status.devices);
+        this.scannerFound.set(status.scanner_found);
         this.scannerMessage.set(status.scanner_message);
       },
       error: () => this.scannerMessage.set(''),
@@ -42,6 +47,11 @@ export class SettingsPage {
       return;
     }
     this.settings.set({ ...current, [key]: value });
+    this.dirty.set(true);
+    this.notice.set('');
+    if (key === 'immich_base_url' || key === 'immich_api_key') {
+      this.connection.set(null);
+    }
   }
 
   knownAlbum(id: string): boolean {
@@ -54,7 +64,7 @@ export class SettingsPage {
 
   setResolution(value: string): void {
     const dpi = Number(value);
-    if (Number.isFinite(dpi)) {
+    if (Number.isFinite(dpi) && dpi > 0) {
       this.update('resolution_dpi', dpi);
     }
   }
@@ -87,7 +97,8 @@ export class SettingsPage {
     this.api.saveSettings(settings).subscribe({
       next: (saved) => {
         this.settings.set(saved);
-        this.notice.set('Saved.');
+        this.dirty.set(false);
+        this.notice.set('Settings saved.');
         this.busy.set(false);
         this.loadAlbums();
       },
@@ -104,14 +115,17 @@ export class SettingsPage {
       return;
     }
     this.busy.set(true);
-    this.error.set('');
+    this.connection.set(null);
     this.api.testConnection(settings).subscribe({
       next: (result) => {
-        this.notice.set(`Connected to Immich ${result.version}. ${result.album_count} albums.`);
+        this.connection.set({
+          ok: true,
+          message: `Connected to Immich ${result.version} · ${result.album_count} albums`,
+        });
         this.busy.set(false);
       },
       error: (error: unknown) => {
-        this.error.set(httpError(error));
+        this.connection.set({ ok: false, message: httpError(error) });
         this.busy.set(false);
       },
     });

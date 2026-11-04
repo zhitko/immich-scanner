@@ -1,46 +1,62 @@
 <section class="panel wide">
-  <p class="actions back">
-    <a routerLink="/scans">Back to waiting</a>
-  </p>
+  <p class="crumbs"><a routerLink="/scans">← Waiting for review</a></p>
 
   @if (error()) {
-    <p class="banner warn" role="alert">{{ error() }}</p>
+    <div class="banner warn dismissable" role="alert">
+      <span>{{ error() }}</span>
+      <button type="button" class="icon" aria-label="Dismiss" (click)="dismissError()">×</button>
+    </div>
   }
   @if (notice()) {
-    <p class="banner ok">{{ notice() }}</p>
+    <p class="toast" role="status">{{ notice() }}</p>
   }
 
   @if (scan(); as scan) {
     <div class="section-head">
       <div>
-        <h2>{{ scan.original_filename }}</h2>
+        <h2>Scan from {{ formatStamp(scan.created_at) }}</h2>
         <p class="lede">
-          {{ scan.width }}×{{ scan.height }}
-          @if (scan.dpi) {
-            · {{ scan.dpi }} dpi
-          }
-          @if (scan.device_name) {
-            · {{ scan.device_name }}
-          }
+          {{ scan.regions.length }} {{ scan.regions.length === 1 ? 'photo' : 'photos' }} ·
+          {{ scan.uploaded_count }} uploaded
+          <span class="muted small">
+            · {{ scan.width }}×{{ scan.height }} px
+            @if (scan.dpi) {
+              · {{ scan.dpi }} dpi
+            }
+          </span>
         </p>
       </div>
-      <p class="actions">
+      <div class="toolbar">
         <button type="button" (click)="addRegion()" [disabled]="busy() || scan.files_deleted">
           Add photo
         </button>
-        <button type="button" (click)="redetect()" [disabled]="busy() || scan.files_deleted">
+        <button
+          type="button"
+          (click)="redetect()"
+          [disabled]="busy() || scan.files_deleted || detecting()"
+        >
           Detect again
+        </button>
+        <button type="button" class="danger" (click)="deleteScan()" [disabled]="busy()">
+          Delete scan
         </button>
         <button
           type="button"
           class="primary"
           (click)="upload()"
-          [disabled]="busy() || scan.files_deleted"
+          [disabled]="busy() || scan.files_deleted || pendingCount() === 0 || uploading()"
         >
-          Upload all
+          @if (uploading()) {
+            <span class="spinner" aria-hidden="true"></span> Uploading…
+          } @else if (pendingCount() > 0) {
+            Upload {{ pendingCount() }} {{ pendingCount() === 1 ? 'photo' : 'photos' }}
+          } @else if (scan.regions.length) {
+            All uploaded
+          } @else {
+            Upload
+          }
         </button>
-        <button type="button" class="danger" (click)="deleteScan()">Delete scan</button>
-      </p>
+      </div>
     </div>
 
     @if (scan.detection_error) {
@@ -50,12 +66,11 @@
       <p class="banner">The original file was removed. History and Immich ids are still here.</p>
     }
     @if (activeJob(); as job) {
-      <p class="banner">
-        Job {{ job.status }}
-        @if (job.error) {
-          — {{ job.error }}
-        }
-      </p>
+      @if (jobRunning()) {
+        <p class="banner busy">
+          <span class="spinner" aria-hidden="true"></span>{{ jobMessage(job) }}
+        </p>
+      }
     }
 
     <div class="editor">
@@ -65,42 +80,102 @@
             <img [src]="bedUrl()" alt="Full scanner bed" (load)="redraw()" />
             <canvas
               #canvas
-              aria-label="Detected photos. Drag to move, use the corners to resize, and the handle to rotate."
+              [style.cursor]="drag()?.kind === 'rotate' ? 'grabbing' : cursor()"
+              aria-label="Photos on the bed. Drag a photo to move it, drag a corner to resize, drag the round handle to rotate, or drag on an empty area to add a photo."
               (pointerdown)="onPointerDown($event)"
               (pointermove)="onPointerMove($event)"
               (pointerup)="onPointerUp()"
-              (pointercancel)="onPointerUp()"
+              (pointercancel)="cancelDrag()"
             ></canvas>
+            @if (detecting()) {
+              <div class="stage-overlay">
+                <span class="spinner large" aria-hidden="true"></span>
+                Finding photos…
+              </div>
+            } @else if (!scan.regions.length) {
+              <div class="stage-overlay soft">No photos found. Drag on the bed to outline one.</div>
+            }
           </div>
-          <p class="muted">
-            Drag a photo to move it. Corners resize it. The handle above the selected photo rotates
-            it. A dashed outline means the crop changed since the last upload, so the next upload
-            creates a new Immich asset.
+          <p class="hints muted small">
+            Drag to move · corners resize · round handle rotates (<kbd>Shift</kbd> snaps 15°) · drag
+            on empty space to add a photo · <kbd>←</kbd><kbd>→</kbd> switch · <kbd>R</kbd> rotate ·
+            <kbd>Del</kbd> remove · <kbd>Ctrl</kbd>+<kbd>S</kbd> save
           </p>
         }
       </div>
 
-      <aside>
+      <aside class="inspector">
+        @if (scan.regions.length) {
+          <ul class="strip" aria-label="Photos in this scan">
+            @for (region of scan.regions; track region.id) {
+              <li>
+                <button
+                  type="button"
+                  class="thumb-button"
+                  [class.active]="region.id === selectedId()"
+                  [attr.aria-pressed]="region.id === selectedId()"
+                  [attr.aria-label]="'Photo ' + region.position + ', ' + statusLabel(region)"
+                  (click)="select(region.id)"
+                >
+                  @if (!scan.files_deleted) {
+                    <img [src]="previewUrl(region)" alt="" loading="lazy" />
+                  }
+                  <span class="badge">{{ region.position }}</span>
+                  <span class="dot" [attr.data-tone]="statusTone(region)"></span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+
         @if (selected(); as region) {
-          <h3>Photo {{ region.position }}</h3>
-          <p class="muted">
-            {{ region.upload_status }}
-            @if (region.immich_asset_id) {
-              · {{ region.immich_asset_id }}
+          <div class="inspector-head">
+            <h3>Photo {{ region.position }}</h3>
+            <span class="chip" [attr.data-tone]="statusTone(region)">{{
+              statusLabel(region)
+            }}</span>
+            @if (immichLink(region); as link) {
+              <a class="small" [href]="link" target="_blank" rel="noopener">Open in Immich ↗</a>
             }
-            @if (region.immich_status) {
-              · {{ region.immich_status }}
-            }
-          </p>
+          </div>
+
           @if (region.upload_error) {
-            <p class="banner warn">{{ region.upload_error }}</p>
+            <p class="banner warn small">{{ region.upload_error }}</p>
           }
           @if (region.crop_changed) {
-            <p class="banner">This crop differs from the uploaded asset.</p>
+            <p class="banner small">
+              The crop changed after upload. Uploading again creates a new asset in Immich.
+            </p>
           }
+
           @if (!scan.files_deleted) {
-            <img class="crop" [src]="previewUrl(region)" alt="Cropped preview" />
+            <div class="crop-box">
+              <img class="crop" [src]="previewUrl(region)" alt="Straightened crop" />
+              <div class="crop-tools">
+                <button
+                  type="button"
+                  class="icon"
+                  title="Rotate left (Shift+R)"
+                  aria-label="Rotate left"
+                  (click)="rotate(false)"
+                  [disabled]="busy()"
+                >
+                  ⟲
+                </button>
+                <button
+                  type="button"
+                  class="icon"
+                  title="Rotate right (R)"
+                  aria-label="Rotate right"
+                  (click)="rotate(true)"
+                  [disabled]="busy()"
+                >
+                  ⟳
+                </button>
+              </div>
+            </div>
           }
+
           @if (draft(); as draft) {
             <form (submit)="$event.preventDefault(); saveMetadata()">
               <label>
@@ -114,7 +189,8 @@
               <label>
                 Description
                 <textarea
-                  rows="3"
+                  rows="2"
+                  placeholder="Who, where, what happened"
                   [value]="draft.description"
                   (input)="updateDraft('description', $any($event.target).value)"
                 ></textarea>
@@ -125,7 +201,7 @@
                   [value]="draft.albumId"
                   (change)="updateDraft('albumId', $any($event.target).value)"
                 >
-                  <option value="">None</option>
+                  <option value="">No album</option>
                   @for (album of albums(); track album.id) {
                     <option [value]="album.id">{{ album.name }}</option>
                   }
@@ -139,6 +215,8 @@
                   Latitude
                   <input
                     inputmode="decimal"
+                    placeholder="48.8566"
+                    title="You can paste “lat, lon” here"
                     [value]="draft.latitude"
                     (input)="updateDraft('latitude', $any($event.target).value)"
                   />
@@ -147,9 +225,41 @@
                   Longitude
                   <input
                     inputmode="decimal"
+                    placeholder="2.3522"
                     [value]="draft.longitude"
                     (input)="updateDraft('longitude', $any($event.target).value)"
                   />
+                </label>
+              </div>
+              <div class="pair">
+                <div class="field">
+                  <span>Rating</span>
+                  <div class="stars" role="group" aria-label="Rating">
+                    @for (score of ratings; track score) {
+                      <button
+                        type="button"
+                        class="star"
+                        [class.on]="draft.rating !== null && score <= draft.rating"
+                        [attr.aria-pressed]="draft.rating === score"
+                        [attr.aria-label]="score + ' stars'"
+                        (click)="setRating(score)"
+                      >
+                        ★
+                      </button>
+                    }
+                  </div>
+                </div>
+                <label>
+                  Visibility
+                  <select
+                    [value]="draft.visibility"
+                    (change)="updateDraft('visibility', $any($event.target).value)"
+                  >
+                    <option value="">Immich default</option>
+                    <option value="timeline">Timeline</option>
+                    <option value="archive">Archive</option>
+                    <option value="hidden">Hidden</option>
+                  </select>
                 </label>
               </div>
               <label class="check">
@@ -160,67 +270,42 @@
                 />
                 Favorite
               </label>
-              <label>
-                Rating
-                <select
-                  [value]="draft.rating"
-                  (change)="updateDraft('rating', $any($event.target).value)"
-                >
-                  <option value="">None</option>
-                  @for (score of ratings; track score) {
-                    <option [value]="score">{{ score }}</option>
-                  }
-                </select>
-              </label>
-              <label>
-                Visibility
-                <select
-                  [value]="draft.visibility"
-                  (change)="updateDraft('visibility', $any($event.target).value)"
-                >
-                  <option value="">Unchanged in Immich</option>
-                  <option value="timeline">Timeline</option>
-                  <option value="archive">Archive</option>
-                  <option value="hidden">Hidden</option>
-                </select>
-              </label>
-              <p class="muted">Orientation turns: {{ region.quarter_turns }}</p>
-              <p class="actions">
-                <button type="submit" class="primary" [disabled]="busy()">Save details</button>
-                <button type="button" (click)="rotate()" [disabled]="busy() || scan.files_deleted">
-                  Rotate 90°
+              <div class="actions">
+                <button type="submit" [disabled]="busy() || !dirty()">
+                  {{ dirty() ? 'Save details' : 'Saved' }}
                 </button>
-                <button
-                  type="button"
-                  (click)="upload(region.id)"
-                  [disabled]="busy() || scan.files_deleted"
-                >
-                  Upload this
-                </button>
-                <button type="button" class="danger" (click)="removeRegion()" [disabled]="busy()">
-                  Remove
-                </button>
-              </p>
+                @if (scan.regions.length > 1) {
+                  <button
+                    type="button"
+                    class="link"
+                    (click)="applyToAll()"
+                    [disabled]="busy()"
+                    title="Copy date, album, and location to every photo in this scan"
+                  >
+                    Copy to all photos
+                  </button>
+                }
+              </div>
             </form>
           }
-        } @else {
-          <p class="empty">No photos yet. Add one, or run detection again.</p>
-        }
 
-        @if (scan.regions.length) {
-          <ul class="region-list">
-            @for (region of scan.regions; track region.id) {
-              <li>
-                <button
-                  type="button"
-                  [class.active]="region.id === selectedId()"
-                  (click)="select(region.id)"
-                >
-                  {{ region.position }} · {{ region.upload_status }}
-                </button>
-              </li>
-            }
-          </ul>
+          <div class="actions inspector-foot">
+            <button
+              type="button"
+              class="primary"
+              (click)="upload(region.id)"
+              [disabled]="busy() || scan.files_deleted || !region.needs_upload || uploading()"
+            >
+              {{ uploadLabel(region) }}
+            </button>
+            <button type="button" class="danger" (click)="removeRegion()" [disabled]="busy()">
+              Remove
+            </button>
+          </div>
+        } @else if (!detecting()) {
+          <p class="empty">
+            No photos yet. Drag on the bed to outline one, or press “Detect again”.
+          </p>
         }
       </aside>
     </div>

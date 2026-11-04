@@ -36,6 +36,19 @@ export class JobsPage {
     return status || 'all';
   }
 
+  typeLabel(type: string): string {
+    return type === 'detect' ? 'Find photos' : type === 'upload' ? 'Upload' : type;
+  }
+
+  duration(job: Job): string {
+    if (!job.started_at) {
+      return '';
+    }
+    const end = job.finished_at ? new Date(job.finished_at) : new Date();
+    const seconds = Math.max(0, (end.getTime() - new Date(job.started_at).getTime()) / 1000);
+    return seconds < 60 ? `${seconds.toFixed(1)} s` : `${Math.round(seconds / 60)} min`;
+  }
+
   private load(): void {
     this.api.listJobs(this.status() || undefined).subscribe({
       next: (jobs) => {

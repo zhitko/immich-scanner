@@ -80,5 +80,9 @@ class SpaFiles(StaticFiles):
         except (HTTPException, StarletteHTTPException) as exc:
             if exc.status_code != 404:
                 raise
-            response = await super().get_response("index.html", scope)
+            path = "index.html"
+            response = await super().get_response(path, scope)
+        if path in ("", ".", "index.html"):
+            # The shell names the hashed bundles, so it must be revalidated after each build.
+            response.headers["Cache-Control"] = "no-cache"
         return response

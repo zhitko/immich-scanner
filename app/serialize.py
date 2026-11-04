@@ -2,7 +2,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.imaging.crop import crop_signature
-from app.models import Region, Scan
+from app.jobs.handlers import needs_upload
+from app.models import Job, Region, Scan
 from app.schemas import RegionOut, ScanDetail, ScanSummary
 
 
@@ -41,6 +42,7 @@ def region_out(region: Region) -> RegionOut:
         upload_error=region.upload_error,
         uploaded_at=region.uploaded_at,
         crop_changed=changed,
+        needs_upload=needs_upload(region),
         updated_at=region.updated_at,
     )
 
@@ -52,6 +54,13 @@ def scan_summary(session: Session, scan: Scan) -> ScanSummary:
             func.count(Region.id).filter(Region.upload_status == "uploaded"),
         ).where(Region.scan_id == scan.id)
     ).one()
+    detecting = session.scalar(
+        select(func.count(Job.id)).where(
+            Job.scan_id == scan.id,
+            Job.type == "detect",
+            Job.status.in_(("queued", "running")),
+        )
+    )
     return ScanSummary(
         id=scan.id,
         created_at=scan.created_at,
@@ -62,6 +71,7 @@ def scan_summary(session: Session, scan: Scan) -> ScanSummary:
         upload_state=scan.upload_state,
         files_deleted=scan.files_deleted,
         detection_error=scan.detection_error,
+        detecting=bool(detecting),
         region_count=int(counts[0]),
         uploaded_count=int(counts[1]),
         original_filename=scan.original_filename,

@@ -53,13 +53,17 @@ export class ArchiveApi {
   patchRegion(
     scanId: string,
     regionId: string,
-    body: RegionGeometry | RegionMetadata,
+    body: RegionGeometry | Partial<RegionMetadata>,
   ): Observable<Region> {
     return this.http.patch<Region>(`/api/scans/${scanId}/regions/${regionId}`, body);
   }
 
-  rotateRegion(scanId: string, regionId: string): Observable<Region> {
-    return this.http.post<Region>(`/api/scans/${scanId}/regions/${regionId}/rotate`, {});
+  rotateRegion(scanId: string, regionId: string, clockwise = true): Observable<Region> {
+    return this.http.post<Region>(
+      `/api/scans/${scanId}/regions/${regionId}/rotate`,
+      {},
+      { params: clockwise ? {} : { clockwise: 'false' } },
+    );
   }
 
   deleteRegion(scanId: string, regionId: string): Observable<void> {

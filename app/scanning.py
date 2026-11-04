@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -12,22 +13,34 @@ from app.settings_store import load_settings
 
 logger = logging.getLogger(__name__)
 
+_PROBE_TTL_S = 10
+_DEVICE_WAIT_S = 30
+_BUSY_RETRIES = 3
+_BUSY_DELAY_S = 3.0
+
 
 class BedScan:
-    """Capture one bed at a time, then hand the image to detection."""
+    """Capture one bed at a time, then hand the image to detection.
+
+    SANE devices can only be opened by one process, so listing and scanning
+    share `_device_lock`. Status polls never wait for it; they answer from the
+    last probe while the device is in use.
+    """
 
     def __init__(self, services: Services, scanner: Scanner) -> None:
         self._services = services
         self.scanner = scanner
         self._lock = threading.Lock()
+        self._device_lock = threading.Lock()
         self._phase = "idle"
         self._phase_message = "Idle"
+        self._phase_started_at: datetime | None = None
         self._thread: threading.Thread | None = None
-        self._probe_lock = threading.Lock()
         self._scanner_cache: tuple[float, bool, str, list[ScannerDevice]] | None = None
         self._last_ok: bool | None = None
         self._last_message = ""
         self._last_id: str | None = None
+        self.busy_delay_s = _BUSY_DELAY_S
 
     def status(self) -> ScannerStatusOut:
         found, message, devices = self._scanner_probe()
@@ -35,6 +48,7 @@ class BedScan:
             return ScannerStatusOut(
                 phase=self._phase,  # type: ignore[arg-type]
                 phase_message=self._phase_message,
+                phase_started_at=self._phase_started_at,
                 scanner_found=found,
                 scanner_message=message,
                 devices=[
@@ -52,6 +66,7 @@ class BedScan:
                 raise RuntimeError("a scan is already running")
             self._phase = "scanning"
             self._phase_message = "Scanning the bed"
+            self._phase_started_at = datetime.now(UTC)
             self._thread = threading.Thread(target=self._run, name="scan", daemon=True)
             self._thread.start()
 
@@ -71,7 +86,7 @@ class BedScan:
             logger.exception("scan failed")
             self._finish(ok=False, message=str(exc), scan_id=None)
             return
-        self._finish(ok=True, message="Ready for review", scan_id=scan_id)
+        self._finish(ok=True, message="Scan saved. Detecting photos.", scan_id=scan_id)
 
     def _capture(self) -> str:
         with self._services.session_factory() as session:
@@ -86,8 +101,13 @@ class BedScan:
             width_mm=settings.width_mm,
             height_mm=settings.height_mm,
         )
-        self.scanner.scan(request, destination)
-        self._set_phase("scanning", "Preparing the scan")
+        if not self._device_lock.acquire(timeout=_DEVICE_WAIT_S):
+            raise ScannerError("the scanner is still in use by a device check")
+        try:
+            self._scan_with_retry(request, destination)
+        finally:
+            self._device_lock.release()
+        self._set_phase("saving", "Saving the scan")
         session = self._services.session_factory()
         registered = None
         try:
@@ -110,6 +130,19 @@ class BedScan:
             session.close()
         return registered.scan_id
 
+    def _scan_with_retry(self, request: ScanRequest, destination: Path) -> None:
+        for attempt in range(1, _BUSY_RETRIES + 1):
+            try:
+                self.scanner.scan(request, destination)
+                return
+            except ScannerError as exc:
+                if "busy" not in str(exc).lower() or attempt == _BUSY_RETRIES:
+                    raise
+                logger.info("scanner busy, retrying (%s/%s)", attempt, _BUSY_RETRIES)
+                self._set_phase("scanning", "Scanner is busy, trying again")
+                time.sleep(self.busy_delay_s)
+                self._set_phase("scanning", "Scanning the bed")
+
     def _capture_path(self, extension: str) -> Path:
         directory = self._services.settings.data_dir / "captures"
         directory.mkdir(parents=True, exist_ok=True)
@@ -122,24 +155,26 @@ class BedScan:
             self._last_id = scan_id
             self._phase = "idle"
             self._phase_message = "Idle"
+            self._phase_started_at = None
 
     def _set_phase(self, phase: str, message: str) -> None:
         with self._lock:
+            if phase != self._phase:
+                self._phase_started_at = datetime.now(UTC)
             self._phase = phase
             self._phase_message = message
 
     def _scanner_probe(self) -> tuple[bool, str, list[ScannerDevice]]:
-        now = datetime.now(UTC).timestamp()
+        now = time.monotonic()
         with self._lock:
-            scanning = self._phase == "scanning"
-        with self._probe_lock:
             cached = self._scanner_cache
-            if scanning:
-                if cached is None:
-                    return True, "Scanning", []
-                return cached[1], "Scanning", cached[3]
-            if cached is not None and now - cached[0] < 10:
+            busy = self._phase != "idle"
+        if cached is not None and (busy or now - cached[0] < _PROBE_TTL_S):
+            return cached[1], cached[2], cached[3]
+        if busy or not self._device_lock.acquire(blocking=False):
+            if cached is not None:
                 return cached[1], cached[2], cached[3]
+            return False, "Checking the scanner…", []
         try:
             listed = self.scanner.list_devices()
         except ScannerError as exc:
@@ -148,12 +183,15 @@ class BedScan:
             devices: list[ScannerDevice] = []
         else:
             devices = listed
-            if devices:
-                found = True
-                message = f"{len(devices)} scanner(s) found"
+            found = bool(devices)
+            if len(devices) == 1:
+                message = devices[0].description
+            elif devices:
+                message = f"{len(devices)} scanners"
             else:
-                found = False
-                message = "No scanner reported by the backend"
-        with self._probe_lock:
-            self._scanner_cache = (now, found, message, devices)
+                message = "No scanner found. Check the USB cable and power."
+        finally:
+            self._device_lock.release()
+        with self._lock:
+            self._scanner_cache = (time.monotonic(), found, message, devices)
         return found, message, devices

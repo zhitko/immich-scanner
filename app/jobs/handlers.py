@@ -7,6 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.clock import utcnow
+from app.detection.base import DetectedRegion
+from app.detection.opencv_detector import overlap_fraction
 from app.imaging.crop import apply_quarter_turns, crop_rotated_rect, crop_signature
 from app.imaging.exif_data import build_exif, format_immich_datetime
 from app.imaging.io import load_rgb, save_rgb
@@ -88,7 +90,7 @@ def handle_upload(session: Session, job, services: Services) -> None:
 
 def needs_upload(region: Region) -> bool:
     signature = _signature(region)
-    if region.upload_status in {"pending", "failed"}:
+    if region.upload_status in {"pending", "failed", "uploading"}:
         return True
     if region.uploaded_crop_signature and region.uploaded_crop_signature != signature:
         return True
@@ -115,10 +117,21 @@ def _replace_open_regions(session: Session, scan: Scan, detected) -> None:
             session.delete(region)
     session.flush()
     remaining = list(session.scalars(select(Region).where(Region.scan_id == scan.id)))
+    kept = [
+        DetectedRegion(
+            center_x=region.center_x,
+            center_y=region.center_y,
+            width=region.width,
+            height=region.height,
+            angle_deg=region.angle_deg,
+        )
+        for region in remaining
+    ]
+    fresh = [item for item in detected if all(overlap_fraction(item, old) < 0.5 for old in kept)]
     start = max((region.position for region in remaining), default=0)
     default_album = load_settings(session).default_album_id or None
     now = utcnow()
-    for offset, item in enumerate(detected, start=1):
+    for offset, item in enumerate(fresh, start=1):
         session.add(
             Region(
                 id=_new_id(),
@@ -153,10 +166,10 @@ def _replace_open_regions(session: Session, scan: Scan, detected) -> None:
 
 
 def _upload_region(session, services, gateway, scan, region, image, stored) -> None:
-    del session
     region.upload_status = "uploading"
     region.upload_error = None
     region.updated_at = utcnow()
+    session.commit()
     signature = _signature(region)
     content_changed = region.immich_asset_id is None or region.uploaded_crop_signature != signature
     if content_changed:
@@ -205,6 +218,7 @@ def _upload_region(session, services, gateway, scan, region, image, stored) -> N
         region.uploaded_crop_signature = signature
         region.album_linked = False
         region.metadata_synced = False
+        session.commit()
     if region.album_id and not region.album_linked:
         if not region.immich_asset_id:
             raise ImmichError("asset id missing before album update")

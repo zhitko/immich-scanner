@@ -1,8 +1,11 @@
 import {
+  corners,
   hitTest,
   movedRect,
+  rectFromPoints,
   resizeFromOpposite,
   rotationAngle,
+  snapAngle,
   toLocal,
   toWorld,
 } from './geometry';
@@ -51,5 +54,23 @@ describe('region geometry', () => {
     expect(hitTest(rect, { x: 120, y: 70 }, 1, true)?.kind).toBe('resize');
     expect(hitTest(rect, { x: 100, y: 70 - 26 }, 1, true)?.kind).toBe('rotate');
     expect(hitTest(rect, { x: 0, y: 0 }, 1, true)).toBeNull();
+  });
+
+  it('draws an upright rectangle between two points inside the bed', () => {
+    const drawn = rectFromPoints({ x: 50, y: 40 }, { x: 10, y: 260 }, { width: 200, height: 200 });
+    expect(drawn).toEqual({ centerX: 30, centerY: 120, width: 40, height: 160, angleDeg: 0 });
+  });
+
+  it('lists corners clockwise from the top-left', () => {
+    const [topLeft, topRight] = corners(rect);
+    expect(topLeft).toEqual({ x: 80, y: 70 });
+    expect(topRight).toEqual({ x: 120, y: 70 });
+  });
+
+  it('snaps near-straight angles and steps when asked', () => {
+    expect(snapAngle(1.2, null)).toBe(0);
+    expect(snapAngle(-89, null)).toBe(-90);
+    expect(snapAngle(7, null)).toBe(7);
+    expect(snapAngle(22, 15)).toBe(15);
   });
 });

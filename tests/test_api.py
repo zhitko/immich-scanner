@@ -225,17 +225,102 @@ def test_second_scan_is_rejected_while_busy(client) -> None:
 
 
 def test_scanner_error_is_reported(client) -> None:
+    attempts: list[int] = []
+
     class BrokenScanner(FakeScanner):
         def scan(self, request, destination) -> None:  # type: ignore[no-untyped-def]
+            attempts.append(1)
             raise ScannerError("device busy")
 
     client.app.state.scanning.scanner = BrokenScanner()
+    client.app.state.scanning.busy_delay_s = 0
     assert client.post("/api/scanner/scan").status_code == 202
     client.app.state.scanning.wait(5)
     status = client.get("/api/scanner").json()
     assert status["last_scan_ok"] is False
     assert "device busy" in status["last_scan_message"]
+    assert len(attempts) == 3
     assert client.get("/api/scans", params={"state": "open"}).json() == []
+
+
+def test_busy_scanner_is_retried(client, app_bundle) -> None:
+    app, _services = app_bundle
+    attempts: list[int] = []
+
+    class FlakyScanner(FakeScanner):
+        def scan(self, request, destination) -> None:  # type: ignore[no-untyped-def]
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise ScannerError("open of device pixma:04A91912 failed: Device busy")
+            super().scan(request, destination)
+
+    app.state.scanning.scanner = FlakyScanner()
+    app.state.scanning.busy_delay_s = 0
+    assert client.post("/api/scanner/scan").status_code == 202
+    app.state.scanning.wait(5)
+    status = client.get("/api/scanner").json()
+    assert status["last_scan_ok"] is True
+    assert len(attempts) == 2
+
+
+def test_status_poll_does_not_probe_while_the_device_is_held(client, app_bundle) -> None:
+    app, _services = app_bundle
+    probes: list[int] = []
+
+    class CountingScanner(FakeScanner):
+        def list_devices(self):  # type: ignore[no-untyped-def]
+            probes.append(1)
+            return super().list_devices()
+
+    scanning = app.state.scanning
+    scanning.scanner = CountingScanner()
+    scanning._scanner_cache = None
+    with scanning._device_lock:
+        body = client.get("/api/scanner").json()
+    assert probes == []
+    assert body["scanner_found"] is False
+    assert client.get("/api/scanner").json()["scanner_found"] is True
+    assert probes == [1]
+
+
+def test_redetect_keeps_uploaded_photos_without_duplicates(client, app_bundle) -> None:
+    app, services = app_bundle
+    scan_id = _import_bed(services, encode_png(make_bed()))
+    app.state.worker.process_available()
+    first = client.get(f"/api/scans/{scan_id}").json()["regions"][0]
+
+    gateway = RecordingImmich()
+    services.build_gateway = lambda _url, _key: gateway
+    client.put(
+        "/api/settings",
+        json={"immich_base_url": "http://immich.local:2283", "immich_api_key": "secret-key"},
+    )
+    client.post(f"/api/scans/{scan_id}/upload", json={"region_ids": [first["id"]]})
+    app.state.worker.process_available()
+
+    assert client.post(f"/api/scans/{scan_id}/detect").status_code == 202
+    app.state.worker.process_available()
+    regions = client.get(f"/api/scans/{scan_id}").json()["regions"]
+    assert len(regions) == 3
+    assert [region["id"] for region in regions if region["upload_status"] == "uploaded"] == [
+        first["id"]
+    ]
+
+
+def test_albums_are_empty_until_immich_is_configured(client) -> None:
+    response = client.get("/api/immich/albums")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_rotate_counter_clockwise(client, app_bundle) -> None:
+    app, services = app_bundle
+    scan_id = _import_bed(services, encode_png(make_bed()))
+    app.state.worker.process_available()
+    region = client.get(f"/api/scans/{scan_id}").json()["regions"][0]
+    url = f"/api/scans/{scan_id}/regions/{region['id']}/rotate"
+    assert client.post(url, params={"clockwise": "false"}).json()["quarter_turns"] == 3
+    assert client.post(url).json()["quarter_turns"] == 0
 
 
 def test_scanner_settings_round_trip(client) -> None:

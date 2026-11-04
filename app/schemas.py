@@ -32,6 +32,7 @@ class RegionOut(BaseModel):
     upload_error: str | None
     uploaded_at: datetime | None
     crop_changed: bool
+    needs_upload: bool
     updated_at: datetime
 
 
@@ -45,6 +46,7 @@ class ScanSummary(BaseModel):
     upload_state: str
     files_deleted: bool
     detection_error: str | None
+    detecting: bool
     region_count: int
     uploaded_count: int
     original_filename: str
@@ -174,7 +176,8 @@ class ScannerDeviceOut(BaseModel):
 
 
 class ScannerStatusOut(BaseModel):
-    phase: Literal["idle", "scanning"]
+    phase: Literal["idle", "scanning", "saving"]
+    phase_started_at: datetime | None
     phase_message: str
     scanner_found: bool
     scanner_message: str

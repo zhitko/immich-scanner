@@ -14,6 +14,8 @@ class DetectorConfig:
     border_fraction: float = 0.012
     min_tolerance: int = 12
     max_tolerance: int = 36
+    min_fill_ratio: float = 0.45
+    edge_inset_px: float = 1.0
 
 
 class OpenCvPhotoDetector:
@@ -43,15 +45,22 @@ class OpenCvPhotoDetector:
         small_h, small_w = gray.shape
         min_area = self._config.min_area_ratio * small_h * small_w
         min_side = self._config.min_side_ratio * min(small_h, small_w)
+        inset = self._config.edge_inset_px * 2
         found: list[DetectedRegion] = []
         for contour in contours:
-            if cv2.contourArea(contour) < min_area:
+            area = cv2.contourArea(contour)
+            if area < min_area:
                 continue
             (center_x, center_y), (rect_w, rect_h), angle = cv2.minAreaRect(contour)
             if rect_w < min_side or rect_h < min_side:
                 continue
             if rect_w * rect_h > 0.98 * small_w * small_h:
                 continue
+            if area < self._config.min_fill_ratio * rect_w * rect_h:
+                continue
+            rect_w, rect_h, angle = normalize_rect(rect_w, rect_h, angle)
+            rect_w = max(1.0, rect_w - inset)
+            rect_h = max(1.0, rect_h - inset)
             found.append(
                 DetectedRegion(
                     center_x=float(center_x) * scale_x,
@@ -110,6 +119,39 @@ class OpenCvPhotoDetector:
             cv2.MORPH_OPEN,
             cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (open_size, open_size)),
         )
+
+
+def normalize_rect(width: float, height: float, angle: float) -> tuple[float, float, float]:
+    """Express a rotated rectangle with its smallest tilt, in (-45, 45].
+
+    OpenCV reports `minAreaRect` angles in [-90, 0) or (0, 90] depending on
+    the version, so an upright landscape print can come back as a portrait
+    rectangle turned by 90 degrees. Cropping that would lay the photo on its side.
+    """
+
+    while angle > 45:
+        angle -= 90
+        width, height = height, width
+    while angle <= -45:
+        angle += 90
+        width, height = height, width
+    return width, height, angle
+
+
+def overlap_fraction(a: DetectedRegion, b: DetectedRegion) -> float:
+    """Intersection area divided by the smaller rectangle's area."""
+
+    smaller = min(a.width * a.height, b.width * b.height)
+    if smaller <= 0:
+        return 0.0
+    kind, points = cv2.rotatedRectangleIntersection(
+        ((a.center_x, a.center_y), (a.width, a.height), a.angle_deg),
+        ((b.center_x, b.center_y), (b.width, b.height), b.angle_deg),
+    )
+    if kind == cv2.INTERSECT_NONE or points is None or len(points) < 3:
+        return 0.0
+    hull = cv2.convexHull(points.astype(np.float32))
+    return float(cv2.contourArea(hull)) / smaller
 
 
 def sort_reading_order(regions: list[DetectedRegion]) -> list[DetectedRegion]:

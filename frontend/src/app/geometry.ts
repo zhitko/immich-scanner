@@ -132,6 +132,42 @@ export function hitTest(rect: Rect, point: Point, scale: number, selected: boole
   return null;
 }
 
+/** Corners clockwise from top-left, in world coordinates. */
+export function corners(rect: Rect): Point[] {
+  const halfW = rect.width / 2;
+  const halfH = rect.height / 2;
+  return [
+    toWorld(rect, { x: -halfW, y: -halfH }),
+    toWorld(rect, { x: halfW, y: -halfH }),
+    toWorld(rect, { x: halfW, y: halfH }),
+    toWorld(rect, { x: -halfW, y: halfH }),
+  ];
+}
+
+/** Upright rectangle spanned by two points, kept inside the bed. */
+export function rectFromPoints(a: Point, b: Point, bounds: Bounds): Rect {
+  const left = clamp(Math.min(a.x, b.x), 0, bounds.width);
+  const right = clamp(Math.max(a.x, b.x), 0, bounds.width);
+  const top = clamp(Math.min(a.y, b.y), 0, bounds.height);
+  const bottom = clamp(Math.max(a.y, b.y), 0, bounds.height);
+  return {
+    centerX: (left + right) / 2,
+    centerY: (top + bottom) / 2,
+    width: right - left,
+    height: bottom - top,
+    angleDeg: 0,
+  };
+}
+
+/** Snap to a multiple of `step` degrees, or to the nearest right angle when within `near`. */
+export function snapAngle(deg: number, step: number | null, near = 1.5): number {
+  if (step) {
+    return normalizeAngle(Math.round(deg / step) * step);
+  }
+  const right = Math.round(deg / 90) * 90;
+  return Math.abs(deg - right) <= near ? normalizeAngle(right) : deg;
+}
+
 export function distance(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }

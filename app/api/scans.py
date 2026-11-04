@@ -199,10 +199,11 @@ def update_region(
 def rotate_region(
     scan_id: str,
     region_id: str,
+    clockwise: bool = True,
     session: Session = Depends(get_session),
 ) -> RegionOut:
     region = _region(session, _scan(session, scan_id), region_id)
-    region.quarter_turns = (region.quarter_turns + 1) % 4
+    region.quarter_turns = (region.quarter_turns + (1 if clockwise else 3)) % 4
     region.updated_at = utcnow()
     return region_out(region)
 

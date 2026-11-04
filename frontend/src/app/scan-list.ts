@@ -1,9 +1,11 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { ArchiveApi, httpError } from './api';
 import { ScanSummary, ScannerStatus } from './models';
 import { formatStamp } from './time';
+
+const AUTO_OPEN_KEY = 'immich-scanner.auto-open';
 
 @Component({
   selector: 'app-scan-list',
@@ -13,22 +15,43 @@ import { formatStamp } from './time';
 export class ScanListPage {
   private readonly api = inject(ArchiveApi);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private previousPhase = 'idle';
+  private ticks = 0;
 
   readonly mode = signal<'open' | 'uploaded'>('open');
   readonly scans = signal<ScanSummary[] | null>(null);
   readonly scanner = signal<ScannerStatus | null>(null);
   readonly error = signal('');
   readonly busyId = signal('');
+  readonly starting = signal(false);
+  readonly now = signal(Date.now());
+  readonly autoOpen = signal(localStorage.getItem(AUTO_OPEN_KEY) === '1');
   readonly formatStamp = formatStamp;
+
+  readonly scanning = computed(() => this.starting() || this.scanner()?.phase !== 'idle');
+  readonly elapsed = computed(() => {
+    const started = this.scanner()?.phase_started_at;
+    if (!started || this.scanner()?.phase === 'idle') {
+      return '';
+    }
+    const seconds = Math.max(0, Math.round((this.now() - new Date(started).getTime()) / 1000));
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  });
+  readonly lampState = computed(() => {
+    const status = this.scanner();
+    if (!status) {
+      return 'unknown';
+    }
+    if (status.phase !== 'idle') {
+      return 'busy';
+    }
+    return status.scanner_found ? 'ok' : 'bad';
+  });
 
   constructor() {
     const destroyRef = inject(DestroyRef);
-    const timer = window.setInterval(() => {
-      if (this.mode() === 'open') {
-        this.loadScanner();
-      }
-    }, 2000);
+    const timer = window.setInterval(() => this.tick(), 1000);
     destroyRef.onDestroy(() => window.clearInterval(timer));
     this.route.data.subscribe((data) => {
       this.mode.set(data['mode'] === 'uploaded' ? 'uploaded' : 'open');
@@ -40,12 +63,14 @@ export class ScanListPage {
     });
   }
 
-  scanning(): boolean {
-    return this.scanner()?.phase === 'scanning';
+  toggleAutoOpen(value: boolean): void {
+    this.autoOpen.set(value);
+    localStorage.setItem(AUTO_OPEN_KEY, value ? '1' : '0');
   }
 
   scan(): void {
     this.error.set('');
+    this.starting.set(true);
     this.api.startScan().subscribe({
       next: () => {
         // A fast capture can finish before this response arrives, so treat the
@@ -53,7 +78,10 @@ export class ScanListPage {
         this.previousPhase = 'scanning';
         this.loadScanner();
       },
-      error: (error: unknown) => this.error.set(httpError(error)),
+      error: (error: unknown) => {
+        this.starting.set(false);
+        this.error.set(httpError(error));
+      },
     });
   }
 
@@ -61,8 +89,25 @@ export class ScanListPage {
     return this.api.scanPreviewUrl(scan.id);
   }
 
+  progress(scan: ScanSummary): string {
+    if (scan.detecting) {
+      return 'Finding photos…';
+    }
+    if (scan.region_count === 0) {
+      return 'No photos found';
+    }
+    const photos = `${scan.region_count} ${scan.region_count === 1 ? 'photo' : 'photos'}`;
+    if (scan.uploaded_count === 0) {
+      return `${photos} to review`;
+    }
+    if (scan.uploaded_count === scan.region_count) {
+      return `${photos} uploaded`;
+    }
+    return `${scan.uploaded_count} of ${photos} uploaded`;
+  }
+
   deleteScan(scan: ScanSummary): void {
-    if (!window.confirm('Delete this scan, its regions, and the image files?')) {
+    if (!window.confirm('Delete this scan, its photos, and the image files?')) {
       return;
     }
     this.busyId.set(scan.id);
@@ -97,6 +142,17 @@ export class ScanListPage {
     });
   }
 
+  private tick(): void {
+    this.now.set(Date.now());
+    this.ticks += 1;
+    if (this.mode() === 'open' && (this.scanning() || this.ticks % 3 === 0)) {
+      this.loadScanner();
+    }
+    if (this.ticks % 2 === 0 && this.scans()?.some((scan) => scan.detecting)) {
+      this.load(true);
+    }
+  }
+
   private load(quiet = false): void {
     if (!quiet) {
       this.error.set('');
@@ -105,8 +161,10 @@ export class ScanListPage {
     this.api.listScans(this.mode()).subscribe({
       next: (scans) => this.scans.set(scans),
       error: (error: unknown) => {
-        this.scans.set([]);
-        this.error.set(httpError(error));
+        if (!quiet) {
+          this.scans.set([]);
+          this.error.set(httpError(error));
+        }
       },
     });
   }
@@ -114,14 +172,25 @@ export class ScanListPage {
   private loadScanner(): void {
     this.api.scannerStatus().subscribe({
       next: (status) => {
-        const finished = this.previousPhase === 'scanning' && status.phase === 'idle';
+        const finished = this.previousPhase !== 'idle' && status.phase === 'idle';
         this.previousPhase = status.phase;
         this.scanner.set(status);
-        if (finished) {
-          this.load(true);
+        if (status.phase !== 'idle' || finished) {
+          this.starting.set(false);
         }
+        if (!finished) {
+          return;
+        }
+        if (status.last_scan_ok && status.last_scan_id && this.autoOpen()) {
+          void this.router.navigate(['/scans', status.last_scan_id]);
+          return;
+        }
+        this.load(true);
       },
-      error: (error: unknown) => this.error.set(httpError(error)),
+      error: (error: unknown) => {
+        this.starting.set(false);
+        this.error.set(httpError(error));
+      },
     });
   }
 }

@@ -25,12 +25,18 @@ def rotated_rect_corners(
 ) -> np.ndarray:
     """Corners in the order top-left, top-right, bottom-right, bottom-left.
 
-    The order matches OpenCV `boxPoints` for `angle_deg`: index 1, 2, 3, 0.
+    The angle turns clockwise on screen (Y down), like OpenCV `boxPoints`.
     Width runs from the first corner to the second.
     """
 
-    box = cv2.boxPoints(((center_x, center_y), (width, height), angle_deg))
-    return np.array([box[1], box[2], box[3], box[0]], dtype=np.float32)
+    radians = np.deg2rad(angle_deg)
+    cos, sin = np.cos(radians), np.sin(radians)
+    half_w, half_h = width / 2, height / 2
+    local = ((-half_w, -half_h), (half_w, -half_h), (half_w, half_h), (-half_w, half_h))
+    return np.array(
+        [(center_x + x * cos - y * sin, center_y + x * sin + y * cos) for x, y in local],
+        dtype=np.float32,
+    )
 
 
 def crop_rotated_rect(
@@ -45,7 +51,7 @@ def crop_rotated_rect(
     crop_h = max(1, int(round(height)))
     source = rotated_rect_corners(center_x, center_y, width, height, angle_deg)
     destination = np.array(
-        [[0, 0], [crop_w - 1, 0], [crop_w - 1, crop_h - 1], [0, crop_h - 1]],
+        [[0, 0], [crop_w, 0], [crop_w, crop_h], [0, crop_h]],
         dtype=np.float32,
     )
     matrix = cv2.getPerspectiveTransform(source, destination)

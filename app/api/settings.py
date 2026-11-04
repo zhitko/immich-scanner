@@ -43,6 +43,8 @@ def list_albums(
     services: Services = Depends(get_services),
 ) -> list[AlbumOut]:
     stored = load_settings(session)
+    if not stored.immich_base_url or not stored.immich_api_key:
+        return []
     gateway = _gateway(services, stored.immich_base_url, stored.immich_api_key)
     try:
         albums = gateway.list_albums()
