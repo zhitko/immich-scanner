@@ -16,7 +16,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The desk is at `http://127.0.0.1:8080`. Original scans, crops, and the SQLite database stay in the `scanner-data` volume.
+The desk is at `http://127.0.0.1:8080`. Original scans, crops, and the SQLite database stay in the `data/` folder on the host, mounted at `/data` in the container.
 
 ### Without a scanner or a real Immich
 

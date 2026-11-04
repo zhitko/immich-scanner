@@ -24,7 +24,7 @@ services:
       DATA_DIR: /data
       STATIC_DIR: /app/static
     volumes:
-      - scanner-data:/data
+      - ./data:/data
     privileged: true
     devices:
       - "/dev/bus/usb:/dev/bus/usb"
@@ -39,6 +39,3 @@ services:
     ports:
       - "3001:3001"
     restart: unless-stopped
-
-volumes:
-  scanner-data:
