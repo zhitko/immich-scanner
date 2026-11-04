@@ -1,4 +1,4 @@
-<section class="panel wide">
+<section class="panel wide editor-page">
   <p class="crumbs"><a routerLink="/scans">← Waiting for review</a></p>
 
   @if (error()) {
@@ -76,68 +76,84 @@
     <div class="editor">
       <div class="stage">
         @if (!scan.files_deleted) {
-          <div class="frame" #frame>
-            <img [src]="bedUrl()" alt="Full scanner bed" (load)="redraw()" />
-            <canvas
-              #canvas
-              [style.cursor]="drag()?.kind === 'rotate' ? 'grabbing' : cursor()"
-              aria-label="Photos on the bed. Drag a photo to move it, drag a corner to resize, drag the round handle to rotate, or drag on an empty area to add a photo."
-              (pointerdown)="onPointerDown($event)"
-              (pointermove)="onPointerMove($event)"
-              (pointerup)="onPointerUp()"
-              (pointercancel)="cancelDrag()"
-            ></canvas>
-            @if (detecting()) {
-              <div class="stage-overlay">
-                <span class="spinner large" aria-hidden="true"></span>
-                Finding photos…
-              </div>
-            } @else if (!scan.regions.length) {
-              <div class="stage-overlay soft">No photos found. Drag on the bed to outline one.</div>
-            }
+          <div class="bed">
+            <div class="frame" #frame>
+              <img [src]="bedUrl()" alt="Full scanner bed" (load)="redraw()" />
+              <canvas
+                #canvas
+                [style.cursor]="drag()?.kind === 'rotate' ? 'grabbing' : cursor()"
+                aria-label="Photos on the bed. Drag a photo to move it, drag a corner to resize, drag the round handle to rotate, or drag on an empty area to add a photo."
+                (pointerdown)="onPointerDown($event)"
+                (pointermove)="onPointerMove($event)"
+                (pointerup)="onPointerUp()"
+                (pointercancel)="cancelDrag()"
+              ></canvas>
+              @if (detecting()) {
+                <div class="stage-overlay">
+                  <span class="spinner large" aria-hidden="true"></span>
+                  Finding photos…
+                </div>
+              } @else if (!scan.regions.length) {
+                <div class="stage-overlay soft">
+                  No photos found. Drag on the bed to outline one.
+                </div>
+              }
+            </div>
           </div>
-          <p class="hints muted small">
-            Drag to move · corners resize · round handle rotates (<kbd>Shift</kbd> snaps 15°) · drag
-            on empty space to add a photo · <kbd>←</kbd><kbd>→</kbd> switch · <kbd>R</kbd> rotate ·
-            <kbd>Del</kbd> remove · <kbd>Ctrl</kbd>+<kbd>S</kbd> save
+          <p class="hints small">
+            <span class="hint-keys">
+              Drag to move · corners resize · round handle rotates (<kbd>Shift</kbd> snaps 15°) ·
+              drag on empty space to add a photo · <kbd>←</kbd><kbd>→</kbd> switch ·
+              <kbd>R</kbd> rotate · <kbd>Del</kbd> remove · <kbd>Ctrl</kbd>+<kbd>S</kbd> save
+            </span>
+            <span class="hint-touch">
+              Tap a photo to select · drag to move · drag corners to resize · round handle rotates ·
+              drag on empty space to add a photo
+            </span>
           </p>
         }
       </div>
 
       <aside class="inspector">
-        @if (scan.regions.length) {
-          <ul class="strip" aria-label="Photos in this scan">
-            @for (region of scan.regions; track region.id) {
-              <li>
-                <button
-                  type="button"
-                  class="thumb-button"
-                  [class.active]="region.id === selectedId()"
-                  [attr.aria-pressed]="region.id === selectedId()"
-                  [attr.aria-label]="'Photo ' + region.position + ', ' + statusLabel(region)"
-                  (click)="select(region.id)"
-                >
-                  @if (!scan.files_deleted) {
-                    <img [src]="previewUrl(region)" alt="" loading="lazy" />
-                  }
-                  <span class="badge">{{ region.position }}</span>
-                  <span class="dot" [attr.data-tone]="statusTone(region)"></span>
-                </button>
-              </li>
-            }
-          </ul>
-        }
-
         @if (selected(); as region) {
           <div class="inspector-head">
             <h3>Photo {{ region.position }}</h3>
+            <span class="muted small">of {{ scan.regions.length }}</span>
             <span class="chip" [attr.data-tone]="statusTone(region)">{{
               statusLabel(region)
             }}</span>
-            @if (immichLink(region); as link) {
-              <a class="small" [href]="link" target="_blank" rel="noopener">Open in Immich ↗</a>
+            @if (scan.regions.length > 1) {
+              <span class="stepper">
+                <button
+                  type="button"
+                  class="icon ghost"
+                  title="Previous photo (←)"
+                  aria-label="Previous photo"
+                  (click)="step(-1)"
+                  [disabled]="busy()"
+                >
+                  <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m15 18-6-6 6-6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="icon ghost"
+                  title="Next photo (→)"
+                  aria-label="Next photo"
+                  (click)="step(1)"
+                  [disabled]="busy()"
+                >
+                  <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                </button>
+              </span>
             }
           </div>
+          @if (immichLink(region); as link) {
+            <a class="small" [href]="link" target="_blank" rel="noopener">Open in Immich ↗</a>
+          }
 
           @if (region.upload_error) {
             <p class="banner warn small">{{ region.upload_error }}</p>
@@ -149,144 +165,175 @@
           }
 
           @if (!scan.files_deleted) {
-            <div class="crop-box">
-              <img class="crop" [src]="previewUrl(region)" alt="Straightened crop" />
-              <div class="crop-tools">
-                <button
-                  type="button"
-                  class="icon"
-                  title="Rotate left (Shift+R)"
-                  aria-label="Rotate left"
-                  (click)="rotate(false)"
-                  [disabled]="busy()"
-                >
-                  ⟲
-                </button>
-                <button
-                  type="button"
-                  class="icon"
-                  title="Rotate right (R)"
-                  aria-label="Rotate right"
-                  (click)="rotate(true)"
-                  [disabled]="busy()"
-                >
-                  ⟳
-                </button>
+            <details
+              class="section"
+              name="inspector-section"
+              [open]="openSection() === 'preview'"
+              (toggle)="setSectionOpen('preview', $any($event.target).open)"
+            >
+              <summary>Preview</summary>
+              <div class="section-body">
+                <div class="crop-box">
+                  <img class="crop" [src]="previewUrl(region)" alt="Straightened crop" />
+                  <div class="crop-tools">
+                    <button
+                      type="button"
+                      class="icon"
+                      title="Rotate left (Shift+R)"
+                      aria-label="Rotate left"
+                      (click)="rotate(false)"
+                      [disabled]="busy()"
+                    >
+                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="icon"
+                      title="Rotate right (R)"
+                      aria-label="Rotate right"
+                      (click)="rotate(true)"
+                      [disabled]="busy()"
+                    >
+                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                        <path d="M21 3v5h-5" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
+            </details>
           }
 
           @if (draft(); as draft) {
-            <form (submit)="$event.preventDefault(); saveMetadata()">
-              <label>
-                Date taken
-                <input
-                  type="datetime-local"
-                  [value]="draft.takenAt"
-                  (input)="updateDraft('takenAt', $any($event.target).value)"
-                />
-              </label>
-              <label>
-                Description
-                <textarea
-                  rows="2"
-                  placeholder="Who, where, what happened"
-                  [value]="draft.description"
-                  (input)="updateDraft('description', $any($event.target).value)"
-                ></textarea>
-              </label>
-              <label>
-                Album
-                <select
-                  [value]="draft.albumId"
-                  (change)="updateDraft('albumId', $any($event.target).value)"
-                >
-                  <option value="">No album</option>
-                  @for (album of albums(); track album.id) {
-                    <option [value]="album.id">{{ album.name }}</option>
-                  }
-                  @if (draft.albumId && !knownAlbum(draft.albumId)) {
-                    <option [value]="draft.albumId">{{ draft.albumId }}</option>
-                  }
-                </select>
-              </label>
-              <div class="pair">
-                <label>
-                  Latitude
-                  <input
-                    inputmode="decimal"
-                    placeholder="48.8566"
-                    title="You can paste “lat, lon” here"
-                    [value]="draft.latitude"
-                    (input)="updateDraft('latitude', $any($event.target).value)"
-                  />
-                </label>
-                <label>
-                  Longitude
-                  <input
-                    inputmode="decimal"
-                    placeholder="2.3522"
-                    [value]="draft.longitude"
-                    (input)="updateDraft('longitude', $any($event.target).value)"
-                  />
-                </label>
-              </div>
-              <div class="pair">
-                <div class="field">
-                  <span>Rating</span>
-                  <div class="stars" role="group" aria-label="Rating">
-                    @for (score of ratings; track score) {
+            <details
+              class="section"
+              name="inspector-section"
+              [open]="openSection() === 'details'"
+              (toggle)="setSectionOpen('details', $any($event.target).open)"
+            >
+              <summary>
+                Details
+                @if (dirty()) {
+                  <span class="chip" data-tone="warn">Unsaved</span>
+                }
+              </summary>
+              <div class="section-body">
+                <form (submit)="$event.preventDefault(); saveMetadata()">
+                  <label>
+                    Date taken
+                    <input
+                      type="datetime-local"
+                      [value]="draft.takenAt"
+                      (input)="updateDraft('takenAt', $any($event.target).value)"
+                    />
+                  </label>
+                  <label>
+                    Description
+                    <textarea
+                      rows="2"
+                      placeholder="Who, where, what happened"
+                      [value]="draft.description"
+                      (input)="updateDraft('description', $any($event.target).value)"
+                    ></textarea>
+                  </label>
+                  <label>
+                    Album
+                    <select
+                      [value]="draft.albumId"
+                      (change)="updateDraft('albumId', $any($event.target).value)"
+                    >
+                      <option value="">No album</option>
+                      @for (album of albums(); track album.id) {
+                        <option [value]="album.id">{{ album.name }}</option>
+                      }
+                      @if (draft.albumId && !knownAlbum(draft.albumId)) {
+                        <option [value]="draft.albumId">{{ draft.albumId }}</option>
+                      }
+                    </select>
+                  </label>
+                  <div class="pair">
+                    <label>
+                      Latitude
+                      <input
+                        inputmode="decimal"
+                        placeholder="48.8566"
+                        title="You can paste “lat, lon” here"
+                        [value]="draft.latitude"
+                        (input)="updateDraft('latitude', $any($event.target).value)"
+                      />
+                    </label>
+                    <label>
+                      Longitude
+                      <input
+                        inputmode="decimal"
+                        placeholder="2.3522"
+                        [value]="draft.longitude"
+                        (input)="updateDraft('longitude', $any($event.target).value)"
+                      />
+                    </label>
+                  </div>
+                  <div class="pair">
+                    <div class="field">
+                      <span>Rating</span>
+                      <div class="stars" role="group" aria-label="Rating">
+                        @for (score of ratings; track score) {
+                          <button
+                            type="button"
+                            class="star"
+                            [class.on]="draft.rating !== null && score <= draft.rating"
+                            [attr.aria-pressed]="draft.rating === score"
+                            [attr.aria-label]="score + ' stars'"
+                            (click)="setRating(score)"
+                          >
+                            ★
+                          </button>
+                        }
+                      </div>
+                    </div>
+                    <label>
+                      Visibility
+                      <select
+                        [value]="draft.visibility"
+                        (change)="updateDraft('visibility', $any($event.target).value)"
+                      >
+                        <option value="">Immich default</option>
+                        <option value="timeline">Timeline</option>
+                        <option value="archive">Archive</option>
+                        <option value="hidden">Hidden</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [checked]="draft.favorite"
+                      (change)="updateDraft('favorite', $any($event.target).checked)"
+                    />
+                    Favorite
+                  </label>
+                  <div class="actions">
+                    <button type="submit" [disabled]="busy() || !dirty()">
+                      {{ dirty() ? 'Save details' : 'Saved' }}
+                    </button>
+                    @if (scan.regions.length > 1) {
                       <button
                         type="button"
-                        class="star"
-                        [class.on]="draft.rating !== null && score <= draft.rating"
-                        [attr.aria-pressed]="draft.rating === score"
-                        [attr.aria-label]="score + ' stars'"
-                        (click)="setRating(score)"
+                        class="link"
+                        (click)="applyToAll()"
+                        [disabled]="busy()"
+                        title="Copy date, album, and location to every photo in this scan"
                       >
-                        ★
+                        Copy to all photos
                       </button>
                     }
                   </div>
-                </div>
-                <label>
-                  Visibility
-                  <select
-                    [value]="draft.visibility"
-                    (change)="updateDraft('visibility', $any($event.target).value)"
-                  >
-                    <option value="">Immich default</option>
-                    <option value="timeline">Timeline</option>
-                    <option value="archive">Archive</option>
-                    <option value="hidden">Hidden</option>
-                  </select>
-                </label>
+                </form>
               </div>
-              <label class="check">
-                <input
-                  type="checkbox"
-                  [checked]="draft.favorite"
-                  (change)="updateDraft('favorite', $any($event.target).checked)"
-                />
-                Favorite
-              </label>
-              <div class="actions">
-                <button type="submit" [disabled]="busy() || !dirty()">
-                  {{ dirty() ? 'Save details' : 'Saved' }}
-                </button>
-                @if (scan.regions.length > 1) {
-                  <button
-                    type="button"
-                    class="link"
-                    (click)="applyToAll()"
-                    [disabled]="busy()"
-                    title="Copy date, album, and location to every photo in this scan"
-                  >
-                    Copy to all photos
-                  </button>
-                }
-              </div>
-            </form>
+            </details>
           }
 
           <div class="actions inspector-foot">

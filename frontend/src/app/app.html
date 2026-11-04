@@ -1,14 +1,78 @@
 <header class="top">
-  <div>
-    <p class="eyebrow">Flatbed</p>
-    <h1>Scanner desk</h1>
+  <div class="top-inner">
+    <a class="brand" routerLink="/scans">
+      <span class="brand-mark" aria-hidden="true">
+        <svg class="i" viewBox="0 0 24 24">
+          <path
+            d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"
+          />
+        </svg>
+      </span>
+      <h1>Scanner desk</h1>
+    </a>
+    <nav aria-label="Main">
+      <a routerLink="/scans" routerLinkActive="active">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </svg>
+        <span>Waiting</span>
+      </a>
+      <a routerLink="/uploaded" routerLinkActive="active">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 13v8" />
+          <path d="M4 14.9A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.24" />
+          <path d="m8 17 4-4 4 4" />
+        </svg>
+        <span>Uploaded</span>
+      </a>
+      <a routerLink="/jobs" routerLinkActive="active">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
+        <span>Jobs</span>
+      </a>
+      <a routerLink="/settings" routerLinkActive="active">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 7h-9M14 17H5" />
+          <circle cx="17" cy="17" r="3" />
+          <circle cx="7" cy="7" r="3" />
+        </svg>
+        <span>Settings</span>
+      </a>
+    </nav>
+    <button
+      type="button"
+      class="icon ghost theme-toggle"
+      [title]="'Theme: ' + theme() + ' (click to change)'"
+      [attr.aria-label]="'Theme: ' + theme()"
+      (click)="cycleTheme()"
+    >
+      @switch (theme()) {
+        @case ('light') {
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path
+              d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
+            />
+          </svg>
+        }
+        @case ('dark') {
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+          </svg>
+        }
+        @default {
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <rect width="20" height="14" x="2" y="3" rx="2" />
+            <path d="M8 21h8M12 17v4" />
+          </svg>
+        }
+      }
+    </button>
   </div>
-  <nav>
-    <a routerLink="/scans" routerLinkActive="active">Waiting</a>
-    <a routerLink="/uploaded" routerLinkActive="active">Uploaded</a>
-    <a routerLink="/jobs" routerLinkActive="active">Jobs</a>
-    <a routerLink="/settings" routerLinkActive="active">Settings</a>
-  </nav>
 </header>
 <main>
   <router-outlet />

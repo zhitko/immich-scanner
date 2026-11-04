@@ -30,6 +30,7 @@ const CORNER_SIGN: Record<Corner, Point> = {
 /** Screen pixels, converted by the caller into original-image pixels. */
 export const HANDLE_GAP_PX = 26;
 export const HANDLE_TOLERANCE_PX = 14;
+export const TOUCH_TOLERANCE_PX = 24;
 
 /**
  * OpenCV `RotatedRect` and the canvas both treat a positive angle as clockwise
@@ -106,9 +107,15 @@ export function resizeFromOpposite(rect: Rect, corner: Corner, pointer: Point): 
   };
 }
 
-export function hitTest(rect: Rect, point: Point, scale: number, selected: boolean): Hit | null {
+export function hitTest(
+  rect: Rect,
+  point: Point,
+  scale: number,
+  selected: boolean,
+  tolerancePx = HANDLE_TOLERANCE_PX,
+): Hit | null {
   if (selected) {
-    const tolerance = HANDLE_TOLERANCE_PX / scale;
+    const tolerance = tolerancePx / scale;
     const gap = HANDLE_GAP_PX / scale;
     const handle = toWorld(rect, { x: 0, y: -rect.height / 2 - gap });
     if (distance(handle, point) <= tolerance) {

@@ -7,7 +7,7 @@
   }
 
   @if (settings(); as settings) {
-    <form (submit)="$event.preventDefault(); save()">
+    <form class="settings-form" (submit)="$event.preventDefault(); save()">
       <fieldset class="group">
         <legend>Scanner</legend>
         <p

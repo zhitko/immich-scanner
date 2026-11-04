@@ -16,6 +16,7 @@ import { ArchiveApi, httpError } from './api';
 import {
   Corner,
   HANDLE_GAP_PX,
+  HANDLE_TOLERANCE_PX,
   Point,
   Rect,
   clampRect,
@@ -26,6 +27,7 @@ import {
   resizeFromOpposite,
   rotationAngle,
   snapAngle,
+  TOUCH_TOLERANCE_PX,
 } from './geometry';
 import { Album, Region, RegionMetadata, ScanDetail } from './models';
 import { formatStamp, fromDatetimeLocal, toDatetimeLocal } from './time';
@@ -60,6 +62,9 @@ interface ActiveJob {
   error: string | null;
 }
 
+type Section = 'preview' | 'details';
+
+const SECTION_KEY = 'immich-scanner.inspector-section';
 const LOCATION_ERROR = 'Enter both latitude and longitude, or leave both empty.';
 const MIN_DRAWN_PX = 12;
 const DEFAULT_STROKE = '#f5f1e8';
@@ -88,6 +93,7 @@ export class EditorPage {
   readonly cursor = signal('crosshair');
   readonly activeJob = signal<ActiveJob | null>(null);
   readonly ratings = [1, 2, 3, 4, 5];
+  readonly openSection = signal<Section | null>(storedSection());
   readonly formatStamp = formatStamp;
 
   readonly selected = computed<Region | null>(() => {
@@ -226,6 +232,17 @@ export class EditorPage {
     return job.type === 'detect' ? 'Finding photos on the bed…' : 'Uploading to Immich…';
   }
 
+  setSectionOpen(section: Section, open: boolean): void {
+    if (open) {
+      this.openSection.set(section);
+    } else if (this.openSection() === section) {
+      this.openSection.set(null);
+    } else {
+      return;
+    }
+    localStorage.setItem(SECTION_KEY, this.openSection() ?? 'none');
+  }
+
   select(id: string): void {
     if (id === this.selectedId()) {
       return;
@@ -276,7 +293,8 @@ export class EditorPage {
       return;
     }
     const canvas = this.canvas()?.nativeElement;
-    const picked = pickRegion(scan.regions, point, this.scale(scan), this.selectedId());
+    const tolerance = event.pointerType === 'mouse' ? HANDLE_TOLERANCE_PX : TOUCH_TOLERANCE_PX;
+    const picked = pickRegion(scan.regions, point, this.scale(scan), this.selectedId(), tolerance);
     if (!picked) {
       canvas?.setPointerCapture(event.pointerId);
       const start = rectFromPoints(point, point, scan);
@@ -799,6 +817,14 @@ export class EditorPage {
   }
 }
 
+function storedSection(): Section | null {
+  const value = localStorage.getItem(SECTION_KEY);
+  if (value === 'none') {
+    return null;
+  }
+  return value === 'details' ? 'details' : 'preview';
+}
+
 function rectOf(region: Region): Rect {
   return {
     centerX: region.center_x,
@@ -873,10 +899,11 @@ function pickRegion(
   point: Point,
   scale: number,
   selectedId: string | null,
+  tolerancePx?: number,
 ): { region: Region; hit: { kind: 'move' | 'resize' | 'rotate'; corner?: Corner } } | null {
   const selected = regions.find((region) => region.id === selectedId);
   if (selected) {
-    const hit = hitTest(rectOf(selected), point, scale, true);
+    const hit = hitTest(rectOf(selected), point, scale, true, tolerancePx);
     if (hit) {
       return { region: selected, hit };
     }

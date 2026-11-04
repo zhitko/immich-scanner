@@ -22,40 +22,42 @@
   } @else if (jobs()!.length === 0) {
     <p class="empty">No jobs in this view.</p>
   } @else {
-    <table>
-      <thead>
-        <tr>
-          <th>When</th>
-          <th>Type</th>
-          <th>Status</th>
-          <th>Scan</th>
-          <th>Took</th>
-          <th>Tries</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (job of jobs()!; track job.id) {
+    <div class="table-card">
+      <table>
+        <thead>
           <tr>
-            <td>{{ formatStamp(job.created_at) }}</td>
-            <td>{{ typeLabel(job.type) }}</td>
-            <td>
-              <span class="pill" [attr.data-status]="job.status">{{ job.status }}</span>
-            </td>
-            <td>
-              @if (job.scan_id) {
-                <a [routerLink]="['/scans', job.scan_id]">{{ job.scan_id.slice(0, 8) }}</a>
-              }
-            </td>
-            <td class="muted">{{ duration(job) }}</td>
-            <td>{{ job.attempts }}</td>
+            <th>When</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Scan</th>
+            <th>Took</th>
+            <th>Tries</th>
           </tr>
-          @if (job.error) {
-            <tr>
-              <td colspan="6" class="job-error">{{ job.error }}</td>
+        </thead>
+        <tbody>
+          @for (job of jobs()!; track job.id) {
+            <tr class="job-row">
+              <td class="cell-when muted">{{ formatStamp(job.created_at) }}</td>
+              <td class="cell-type">{{ typeLabel(job.type) }}</td>
+              <td class="cell-status">
+                <span class="pill" [attr.data-status]="job.status">{{ job.status }}</span>
+              </td>
+              <td class="cell-end" data-label="Scan">
+                @if (job.scan_id) {
+                  <a [routerLink]="['/scans', job.scan_id]">{{ job.scan_id.slice(0, 8) }}</a>
+                }
+              </td>
+              <td class="muted num" data-label="Took">{{ duration(job) }}</td>
+              <td class="num cell-end" data-label="Tries">{{ job.attempts }}</td>
             </tr>
+            @if (job.error) {
+              <tr class="error-row">
+                <td colspan="6" class="job-error">{{ job.error }}</td>
+              </tr>
+            }
           }
-        }
-      </tbody>
-    </table>
+        </tbody>
+      </table>
+    </div>
   }
 </section>
