@@ -1172,6 +1172,12 @@ details.section[open] > summary {
   display: flex;
   gap: 6px;
 }
+.crop-tools.start {
+  right: auto;
+  bottom: auto;
+  top: 10px;
+  left: 10px;
+}
 .crop-tools button {
   border-color: transparent;
   background: rgba(20, 22, 28, 0.72);
@@ -1182,6 +1188,57 @@ details.section[open] > summary {
 }
 .crop-tools button:hover:not(:disabled) {
   background: rgba(20, 22, 28, 0.9);
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 64px 24px 24px;
+  background: rgba(8, 10, 14, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  border-color: transparent;
+  background: rgba(20, 22, 28, 0.72);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.lightbox-close:hover:not(:disabled) {
+  background: rgba(20, 22, 28, 0.9);
+}
+.lightbox-frame {
+  --aspect: 1;
+  --turns: 0;
+  container-type: size;
+  position: relative;
+  width: min(92vw, calc((100dvh - 112px) * var(--aspect)));
+  aspect-ratio: var(--aspect);
+}
+.lightbox-frame img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100cqi;
+  height: 100cqb;
+  max-height: none;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: var(--shadow-lg);
+  transform: translate(-50%, -50%) rotate(calc(var(--turns) * 90deg));
+  transform-origin: center;
+}
+.lightbox-frame.odd img {
+  width: 100cqb;
+  height: 100cqi;
 }
 .inspector-foot {
   justify-content: space-between;

@@ -100,6 +100,7 @@ export class EditorPage {
   readonly activeJob = signal<ActiveJob | null>(null);
   readonly ratings = [1, 2, 3, 4, 5];
   readonly openSection = signal<Section | null>(storedSection());
+  readonly previewOpen = signal(false);
   readonly formatStamp = formatStamp;
 
   readonly selected = computed<Region | null>(() => {
@@ -128,6 +129,7 @@ export class EditorPage {
 
   private readonly canvas = viewChild<ElementRef<HTMLCanvasElement>>('canvas');
   private readonly frame = viewChild<ElementRef<HTMLElement>>('frame');
+  private readonly lightboxClose = viewChild<ElementRef<HTMLButtonElement>>('lightboxClose');
   private readonly scanId = signal<string | null>(null);
   private noticeTimer = 0;
   /** Bumped on local edits so an in-flight scan reload cannot roll them back. */
@@ -160,6 +162,17 @@ export class EditorPage {
       this.selectedId();
       this.drag();
       untracked(() => this.draw());
+    });
+    effect(() => {
+      if (!this.selected() && this.previewOpen()) {
+        this.previewOpen.set(false);
+      }
+    });
+    effect(() => {
+      const close = this.lightboxClose();
+      if (this.previewOpen() && close) {
+        close.nativeElement.focus();
+      }
     });
     this.api.listAlbums().subscribe({
       next: (albums) => this.albums.set(albums),
@@ -425,6 +438,13 @@ export class EditorPage {
   }
 
   onKey(event: KeyboardEvent): void {
+    if (this.previewOpen()) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.closePreview();
+      }
+      return;
+    }
     const target = event.target as HTMLElement | null;
     const typing = !!target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
     const modifier = event.ctrlKey || event.metaKey;
@@ -567,6 +587,14 @@ export class EditorPage {
       this.dirty.set(false);
       this.selectNow(next?.id ?? null);
     });
+  }
+
+  openPreview(): void {
+    this.previewOpen.set(true);
+  }
+
+  closePreview(): void {
+    this.previewOpen.set(false);
   }
 
   rotate(clockwise: boolean): void {

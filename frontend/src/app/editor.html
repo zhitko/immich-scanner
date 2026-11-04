@@ -182,6 +182,22 @@
                     [style.--turns]="region.quarter_turns % 4"
                   >
                     <img class="crop" [src]="previewUrl(region)" alt="Straightened crop" />
+                    <div class="crop-tools start">
+                      <button
+                        type="button"
+                        class="icon"
+                        title="View larger"
+                        aria-label="View larger"
+                        (click)="openPreview()"
+                      >
+                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M15 3h6v6" />
+                          <path d="M9 21H3v-6" />
+                          <path d="M21 3 14 10" />
+                          <path d="m3 21 7-7" />
+                        </svg>
+                      </button>
+                    </div>
                     <div class="crop-tools">
                       <button
                         type="button"
@@ -388,6 +404,37 @@
         }
       </aside>
     </div>
+    @if (previewOpen() && selected(); as photo) {
+      <div
+        class="lightbox"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Photo preview"
+        (click)="closePreview()"
+      >
+        <button
+          #lightboxClose
+          type="button"
+          class="icon lightbox-close"
+          aria-label="Close preview"
+          (click)="$event.stopPropagation(); closePreview()"
+        >
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+        <div
+          class="lightbox-frame"
+          [class.odd]="photo.quarter_turns % 2 === 1"
+          [style.--aspect]="frameAspect(photo)"
+          [style.--turns]="photo.quarter_turns % 4"
+          (click)="$event.stopPropagation()"
+        >
+          <img [src]="previewUrl(photo)" alt="Photo preview" />
+        </div>
+      </div>
+    }
   } @else if (!error()) {
     <p class="muted">Loading scan…</p>
   }
