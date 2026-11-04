@@ -221,8 +221,6 @@ __marimo__/
 
 # immich-scanner
 data/
-client/data/
-server/backend/data/
 node_modules/
 dist/
 .angular/

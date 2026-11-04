@@ -1,0 +1,161 @@
+<section class="panel narrow">
+  <h2>Scanner and Immich</h2>
+  <p class="lede">
+    This computer scans the bed, then uploads each crop to Immich. The key needs permission to
+    upload assets, update them, read albums, and add assets to an album.
+  </p>
+
+  @if (error()) {
+    <p class="banner warn" role="alert">{{ error() }}</p>
+  }
+  @if (notice()) {
+    <p class="banner ok">{{ notice() }}</p>
+  }
+
+  @if (settings(); as settings) {
+    <form (submit)="$event.preventDefault(); save()">
+      <h3>Scanner</h3>
+      <p class="muted">{{ scannerMessage() }}</p>
+      <label>
+        Device
+        <select
+          [value]="settings.device_name"
+          (change)="update('device_name', $any($event.target).value)"
+        >
+          <option value="">Default device</option>
+          @for (device of devices(); track device.name) {
+            <option [value]="device.name">{{ device.description }}</option>
+          }
+          @if (settings.device_name && !knownDevice(settings.device_name)) {
+            <option [value]="settings.device_name">{{ settings.device_name }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Resolution (dpi)
+        <input
+          type="number"
+          min="50"
+          max="4800"
+          [value]="settings.resolution_dpi"
+          (input)="setResolution($any($event.target).value)"
+        />
+      </label>
+      <div class="pair">
+        <label>
+          Format
+          <select
+            [value]="settings.scan_format"
+            (change)="update('scan_format', $any($event.target).value)"
+          >
+            <option value="tiff">TIFF</option>
+            <option value="png">PNG</option>
+          </select>
+        </label>
+        <label>
+          Mode
+          <select
+            [value]="settings.scan_mode"
+            (change)="update('scan_mode', $any($event.target).value)"
+          >
+            <option value="Color">Color</option>
+            <option value="Gray">Gray</option>
+          </select>
+        </label>
+      </div>
+      <div class="pair">
+        <label>
+          Width (mm, optional)
+          <input
+            type="number"
+            min="1"
+            max="400"
+            step="0.1"
+            placeholder="Full bed"
+            [value]="settings.width_mm ?? ''"
+            (input)="setMillimetres('width_mm', $any($event.target).value)"
+          />
+        </label>
+        <label>
+          Height (mm, optional)
+          <input
+            type="number"
+            min="1"
+            max="400"
+            step="0.1"
+            placeholder="Full bed"
+            [value]="settings.height_mm ?? ''"
+            (input)="setMillimetres('height_mm', $any($event.target).value)"
+          />
+        </label>
+      </div>
+      <p class="muted">Leave width and height empty to scan the whole bed. A LiDE 700F is about 216 × 297 mm.</p>
+
+      <h3>Immich</h3>
+      <label>
+        Immich URL
+        <input
+          [value]="settings.immich_base_url"
+          (input)="update('immich_base_url', $any($event.target).value)"
+          placeholder="http://immich.home:2283"
+          autocomplete="off"
+        />
+      </label>
+      <label>
+        API key
+        <input
+          [type]="revealKey() ? 'text' : 'password'"
+          [value]="settings.immich_api_key"
+          (input)="update('immich_api_key', $any($event.target).value)"
+          autocomplete="off"
+        />
+      </label>
+      <p class="actions">
+        <button type="button" (click)="revealKey.set(!revealKey())">
+          {{ revealKey() ? 'Hide key' : 'Show key' }}
+        </button>
+      </p>
+      <label>
+        Default album
+        <select
+          [value]="settings.default_album_id"
+          (change)="update('default_album_id', $any($event.target).value)"
+        >
+          <option value="">None</option>
+          @for (album of albums(); track album.id) {
+            <option [value]="album.id">{{ album.name }} ({{ album.asset_count }})</option>
+          }
+          @if (settings.default_album_id && !knownAlbum(settings.default_album_id)) {
+            <option [value]="settings.default_album_id">{{ settings.default_album_id }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Crop format
+        <select
+          [value]="settings.output_format"
+          (change)="update('output_format', $any($event.target).value)"
+        >
+          <option value="jpeg">JPEG</option>
+          <option value="png">PNG</option>
+        </select>
+      </label>
+      <label>
+        JPEG quality
+        <input
+          type="number"
+          min="80"
+          max="100"
+          [value]="settings.jpeg_quality"
+          (input)="setQuality($any($event.target).value)"
+        />
+      </label>
+      <p class="actions">
+        <button type="submit" class="primary" [disabled]="busy()">Save</button>
+        <button type="button" [disabled]="busy()" (click)="test()">Test connection</button>
+      </p>
+    </form>
+  } @else if (!error()) {
+    <p class="muted">Loading settings…</p>
+  }
+</section>

@@ -1,0 +1,44 @@
+# The laptop that has the USB flatbed. Scanning, review, and the Immich upload
+# all happen here.
+#
+#   cp .env.example .env
+#   docker compose up --build
+#
+# Without a real Immich instance, add the mock profile and point Immich at
+# http://mock-immich:3001 before the first save.
+#
+#   docker compose --profile mock up --build
+#
+# USB: the container is privileged and receives /dev/bus/usb so SANE's genesys
+# backend can open the Canon LiDE 700F. See the README for udev rules.
+services:
+  scanner:
+    build: .
+    image: immich-scanner
+    ports:
+      - "8080:8000"
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      DATA_DIR: /data
+      STATIC_DIR: /app/static
+    volumes:
+      - scanner-data:/data
+    privileged: true
+    devices:
+      - "/dev/bus/usb:/dev/bus/usb"
+    restart: unless-stopped
+
+  mock-immich:
+    profiles: ["mock"]
+    build:
+      context: .
+      dockerfile: Dockerfile.mock
+    image: immich-scanner-mock
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+volumes:
+  scanner-data:

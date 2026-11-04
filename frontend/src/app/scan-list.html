@@ -1,0 +1,90 @@
+<section class="panel">
+  @if (mode() === 'open') {
+    <div class="scan-bar">
+      <div>
+        <p class="lamp" [attr.data-state]="scanner()?.scanner_found ? 'ok' : 'bad'">
+          {{ scanner()?.scanner_message || 'Checking the scanner…' }}
+        </p>
+        <p class="muted">{{ scanner()?.phase_message || 'Idle' }}</p>
+        @if (scanner()?.last_scan_message) {
+          <p [class]="scanner()?.last_scan_ok ? 'banner ok' : 'banner warn'">
+            {{ scanner()!.last_scan_message }}
+            @if (scanner()?.last_scan_ok && scanner()?.last_scan_id) {
+              <a [routerLink]="['/scans', scanner()!.last_scan_id]">Open it</a>
+            }
+          </p>
+        }
+      </div>
+      <button type="button" class="primary" [disabled]="scanning()" (click)="scan()">
+        {{ scanning() ? 'Scanning…' : 'Scan bed' }}
+      </button>
+    </div>
+  }
+
+  <div class="section-head">
+    <div>
+      <h2>{{ mode() === 'open' ? 'Waiting for review' : 'Uploaded' }}</h2>
+      <p class="lede">
+        @if (mode() === 'open') {
+          Scans that still have photos to check or send.
+        } @else {
+          Finished scans. The history stays after the original file is removed.
+        }
+      </p>
+    </div>
+  </div>
+
+  @if (error()) {
+    <p class="banner warn" role="alert">{{ error() }}</p>
+  }
+
+  @if (scans() === null) {
+    <p class="muted">Loading scans…</p>
+  } @else if (scans()!.length === 0) {
+    <p class="empty">Nothing here yet. Put the photos on the glass and scan the bed.</p>
+  } @else {
+    <ul class="cards">
+      @for (scan of scans()!; track scan.id) {
+        <li class="card">
+          <a class="thumb" [routerLink]="['/scans', scan.id]">
+            @if (!scan.files_deleted) {
+              <img [src]="previewUrl(scan)" alt="" />
+            } @else {
+              <span>File removed</span>
+            }
+          </a>
+          <div class="card-body">
+            <a [routerLink]="['/scans', scan.id]"
+              ><strong>{{ formatStamp(scan.created_at) }}</strong></a
+            >
+            <p class="muted">
+              {{ scan.region_count }} photos · {{ scan.uploaded_count }} uploaded
+              @if (scan.dpi) {
+                · {{ scan.dpi }} dpi
+              }
+            </p>
+            @if (scan.detection_error) {
+              <p class="banner warn">{{ scan.detection_error }}</p>
+            }
+            <p class="actions">
+              <a class="button" [routerLink]="['/scans', scan.id]">Open</a>
+              @if (mode() === 'uploaded' && !scan.files_deleted) {
+                <button type="button" [disabled]="busyId() === scan.id" (click)="deleteFiles(scan)">
+                  Free disk space
+                </button>
+              }
+              <button
+                type="button"
+                class="danger"
+                [disabled]="busyId() === scan.id"
+                (click)="deleteScan(scan)"
+              >
+                Delete scan
+              </button>
+            </p>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</section>

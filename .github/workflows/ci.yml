@@ -5,23 +5,7 @@ on:
   pull_request:
 
 jobs:
-  client:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install
-        run: pip install -e "./client[dev]"
-      - name: Lint
-        working-directory: client
-        run: ruff check . && ruff format --check .
-      - name: Test
-        working-directory: client
-        run: pytest
-
-  server:
+  app:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,26 +15,24 @@ jobs:
       - name: System libraries for OpenCV
         run: sudo apt-get update && sudo apt-get install -y libglib2.0-0 libgomp1 libgl1
       - name: Install
-        run: pip install -e "./server/backend[dev]"
+        run: pip install -e ".[dev]"
       - name: Lint
-        working-directory: server/backend
         run: ruff check . && ruff format --check .
       - name: Test
-        working-directory: server/backend
         run: pytest
 
   frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: server/frontend
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: server/frontend/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm test -- --watch=false
@@ -60,7 +42,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build the scanner agent
-        run: docker compose -f docker-compose.client.yml build
-      - name: Build the review server and mock Immich
-        run: docker compose -f docker-compose.server.yml --profile mock build
+      - name: Build the app and mock Immich
+        run: docker compose --profile mock build
