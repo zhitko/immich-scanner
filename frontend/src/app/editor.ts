@@ -15,8 +15,10 @@ import { EMPTY, Observable, finalize, forkJoin, map, of, switchMap, tap } from '
 import { ArchiveApi, httpError } from './api';
 import {
   Corner,
+  Edge,
   HANDLE_GAP_PX,
   HANDLE_TOLERANCE_PX,
+  Hit,
   Point,
   Rect,
   clampRect,
@@ -24,6 +26,7 @@ import {
   hitTest,
   movedRect,
   rectFromPoints,
+  resizeFromEdge,
   resizeFromOpposite,
   rotationAngle,
   snapAngle,
@@ -44,12 +47,13 @@ interface Draft {
   visibility: string;
 }
 
-type DragKind = 'move' | 'resize' | 'rotate' | 'draw';
+type DragKind = 'move' | 'resize' | 'edge' | 'rotate' | 'draw';
 
 interface Drag {
   id: string | null;
   kind: DragKind;
   corner: Corner | null;
+  edge: Edge | null;
   originX: number;
   originY: number;
   start: Rect;
@@ -315,6 +319,7 @@ export class EditorPage {
         id: null,
         kind: 'draw',
         corner: null,
+        edge: null,
         originX: point.x,
         originY: point.y,
         start,
@@ -334,7 +339,8 @@ export class EditorPage {
     this.drag.set({
       id: picked.region.id,
       kind: picked.hit.kind,
-      corner: picked.hit.kind === 'resize' ? (picked.hit.corner ?? null) : null,
+      corner: picked.hit.kind === 'resize' ? picked.hit.corner : null,
+      edge: picked.hit.kind === 'edge' ? picked.hit.edge : null,
       originX: point.x,
       originY: point.y,
       start,
@@ -360,6 +366,8 @@ export class EditorPage {
       current = movedRect(drag.start, origin, point, bounds);
     } else if (drag.kind === 'resize' && drag.corner) {
       current = clampRect(resizeFromOpposite(drag.start, drag.corner, point), bounds);
+    } else if (drag.kind === 'edge' && drag.edge) {
+      current = clampRect(resizeFromEdge(drag.start, drag.edge, point), bounds);
     } else if (drag.kind === 'rotate') {
       const raw = rotationAngle({ x: drag.start.centerX, y: drag.start.centerY }, point);
       current = { ...drag.start, angleDeg: snapAngle(raw, event.shiftKey ? 15 : null) };
@@ -751,6 +759,9 @@ export class EditorPage {
         ? 'nwse-resize'
         : 'nesw-resize';
     }
+    if (picked.hit.kind === 'edge') {
+      return edgeCursor(picked.region.angle_deg, picked.hit.edge);
+    }
     return 'move';
   }
 
@@ -915,7 +926,7 @@ function pickRegion(
   scale: number,
   selectedId: string | null,
   tolerancePx?: number,
-): { region: Region; hit: { kind: 'move' | 'resize' | 'rotate'; corner?: Corner } } | null {
+): { region: Region; hit: Hit } | null {
   const selected = regions.find((region) => region.id === selectedId);
   if (selected) {
     const hit = hitTest(rectOf(selected), point, scale, true, tolerancePx);
@@ -968,6 +979,10 @@ function drawRegion(
     context.lineTo(0, -halfH - HANDLE_GAP_PX);
     context.stroke();
     fillHandle(context, 0, -halfH - HANDLE_GAP_PX, color, true);
+    fillEdgeHandle(context, 0, -halfH, halfW * 2, color, true);
+    fillEdgeHandle(context, halfW, 0, halfH * 2, color, false);
+    fillEdgeHandle(context, 0, halfH, halfW * 2, color, true);
+    fillEdgeHandle(context, -halfW, 0, halfH * 2, color, false);
     for (const [x, y] of [
       [-halfW, -halfH],
       [halfW, -halfH],
@@ -1009,6 +1024,28 @@ function drawNew(context: CanvasRenderingContext2D, rect: Rect, scale: number): 
   context.restore();
 }
 
+function fillEdgeHandle(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  edgeLength: number,
+  color: string,
+  alongWidth: boolean,
+): void {
+  const long = Math.min(22, Math.max(8, edgeLength * 0.22));
+  const short = 6;
+  const width = alongWidth ? long : short;
+  const height = alongWidth ? short : long;
+  context.setLineDash([]);
+  context.fillStyle = '#fff';
+  context.strokeStyle = color;
+  context.lineWidth = 2;
+  context.beginPath();
+  context.roundRect(x - width / 2, y - height / 2, width, height, 3);
+  context.fill();
+  context.stroke();
+}
+
 function fillHandle(
   context: CanvasRenderingContext2D,
   x: number,
@@ -1024,6 +1061,22 @@ function fillHandle(
   context.arc(x, y, rotate ? 7 : 6, 0, Math.PI * 2);
   context.fill();
   context.stroke();
+}
+
+/** Bidirectional resize cursor for an edge, following the print's rotation. */
+function edgeCursor(angleDeg: number, edge: Edge): string {
+  const axis = edge === 'e' || edge === 'w' ? angleDeg : angleDeg + 90;
+  const wrapped = ((axis % 180) + 180) % 180;
+  if (wrapped < 22.5 || wrapped >= 157.5) {
+    return 'ew-resize';
+  }
+  if (wrapped < 67.5) {
+    return 'nwse-resize';
+  }
+  if (wrapped < 112.5) {
+    return 'ns-resize';
+  }
+  return 'nesw-resize';
 }
 
 function strokeColor(region: Region, selected: boolean): string {

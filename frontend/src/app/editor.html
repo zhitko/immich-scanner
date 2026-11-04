@@ -82,7 +82,7 @@
               <canvas
                 #canvas
                 [style.cursor]="drag()?.kind === 'rotate' ? 'grabbing' : cursor()"
-                aria-label="Photos on the bed. Drag a photo to move it, drag a corner to resize, drag the round handle to rotate, or drag on an empty area to add a photo."
+                aria-label="Photos on the bed. Drag a photo to move it, drag an edge to change its width or height, drag a corner to resize, drag the round handle to rotate, or drag on an empty area to add a photo."
                 (pointerdown)="onPointerDown($event)"
                 (pointermove)="onPointerMove($event)"
                 (pointerup)="onPointerUp()"
@@ -102,13 +102,14 @@
           </div>
           <p class="hints small">
             <span class="hint-keys">
-              Drag to move · corners resize · round handle rotates (<kbd>Shift</kbd> snaps 15°) ·
-              drag on empty space to add a photo · <kbd>←</kbd><kbd>→</kbd> switch ·
-              <kbd>R</kbd> rotate · <kbd>Del</kbd> remove · <kbd>Ctrl</kbd>+<kbd>S</kbd> save locally
+              Drag to move · edges change width or height · corners resize · round handle rotates
+              (<kbd>Shift</kbd> snaps 15°) · drag on empty space to add a photo · <kbd>←</kbd
+              ><kbd>→</kbd> switch · <kbd>R</kbd> rotate · <kbd>Del</kbd> remove ·
+              <kbd>Ctrl</kbd>+<kbd>S</kbd> save locally
             </span>
             <span class="hint-touch">
-              Tap a photo to select · drag to move · drag corners to resize · round handle rotates ·
-              drag on empty space to add a photo
+              Tap a photo to select · drag to move · drag an edge to change width or height · drag
+              corners to resize · round handle rotates · drag on empty space to add a photo
             </span>
           </p>
         }

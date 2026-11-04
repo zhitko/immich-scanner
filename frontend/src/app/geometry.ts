@@ -18,13 +18,27 @@ export interface Bounds {
 
 export type Corner = 'nw' | 'ne' | 'se' | 'sw';
 
-export type Hit = { kind: 'rotate' } | { kind: 'resize'; corner: Corner } | { kind: 'move' };
+/** North and south change height; east and west change width. */
+export type Edge = 'n' | 'e' | 's' | 'w';
+
+export type Hit =
+  | { kind: 'rotate' }
+  | { kind: 'resize'; corner: Corner }
+  | { kind: 'edge'; edge: Edge }
+  | { kind: 'move' };
 
 const CORNER_SIGN: Record<Corner, Point> = {
   nw: { x: -1, y: -1 },
   ne: { x: 1, y: -1 },
   se: { x: 1, y: 1 },
   sw: { x: -1, y: 1 },
+};
+
+const EDGE_SIGN: Record<Edge, Point> = {
+  n: { x: 0, y: -1 },
+  e: { x: 1, y: 0 },
+  s: { x: 0, y: 1 },
+  w: { x: -1, y: 0 },
 };
 
 /** Screen pixels, converted by the caller into original-image pixels. */
@@ -107,6 +121,36 @@ export function resizeFromOpposite(rect: Rect, corner: Corner, pointer: Point): 
   };
 }
 
+/**
+ * Slide one side. The opposite edge stays where it is, and only width (east,
+ * west) or height (north, south) changes. The side follows the pointer in the
+ * rectangle's own axes, so a rotated print still grows along its edge.
+ */
+export function resizeFromEdge(rect: Rect, edge: Edge, pointer: Point): Rect {
+  const sign = EDGE_SIGN[edge];
+  const fixed = toWorld(rect, {
+    x: -sign.x * (rect.width / 2),
+    y: -sign.y * (rect.height / 2),
+  });
+  const anchored = { ...rect, centerX: fixed.x, centerY: fixed.y };
+  const local = toLocal(anchored, pointer);
+  const alongWidth = sign.x !== 0;
+  const delta = alongWidth ? local.x : local.y;
+  const span = Math.max(8, Math.abs(delta));
+  const direction = Math.sign(delta) || (alongWidth ? sign.x : sign.y);
+  const center = toWorld(
+    anchored,
+    alongWidth ? { x: (direction * span) / 2, y: 0 } : { x: 0, y: (direction * span) / 2 },
+  );
+  return {
+    centerX: center.x,
+    centerY: center.y,
+    width: alongWidth ? span : rect.width,
+    height: alongWidth ? rect.height : span,
+    angleDeg: rect.angleDeg,
+  };
+}
+
 export function hitTest(
   rect: Rect,
   point: Point,
@@ -114,6 +158,7 @@ export function hitTest(
   selected: boolean,
   tolerancePx = HANDLE_TOLERANCE_PX,
 ): Hit | null {
+  const local = toLocal(rect, point);
   if (selected) {
     const tolerance = tolerancePx / scale;
     const gap = HANDLE_GAP_PX / scale;
@@ -131,12 +176,35 @@ export function hitTest(
         return { kind: 'resize', corner };
       }
     }
+    const edge = nearestEdge(rect, local, tolerance);
+    if (edge) {
+      return { kind: 'edge', edge };
+    }
   }
-  const local = toLocal(rect, point);
   if (Math.abs(local.x) <= rect.width / 2 && Math.abs(local.y) <= rect.height / 2) {
     return { kind: 'move' };
   }
   return null;
+}
+
+/** Closest side whose border line is within `tolerance` of a local point. */
+function nearestEdge(rect: Rect, local: Point, tolerance: number): Edge | null {
+  const halfW = rect.width / 2;
+  const halfH = rect.height / 2;
+  const sides: { edge: Edge; across: number; along: number; limit: number }[] = [
+    { edge: 'n', across: Math.abs(local.y + halfH), along: Math.abs(local.x), limit: halfW },
+    { edge: 's', across: Math.abs(local.y - halfH), along: Math.abs(local.x), limit: halfW },
+    { edge: 'e', across: Math.abs(local.x - halfW), along: Math.abs(local.y), limit: halfH },
+    { edge: 'w', across: Math.abs(local.x + halfW), along: Math.abs(local.y), limit: halfH },
+  ];
+  let closest: { edge: Edge; across: number } | null = null;
+  for (const side of sides) {
+    const nearer = !closest || side.across < closest.across;
+    if (side.across <= tolerance && side.along <= side.limit && nearer) {
+      closest = side;
+    }
+  }
+  return closest?.edge ?? null;
 }
 
 /** Corners clockwise from top-left, in world coordinates. */
