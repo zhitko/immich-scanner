@@ -121,6 +121,53 @@ def test_overlap_fraction() -> None:
     assert 0.45 < half < 0.55
 
 
+def test_prints_running_off_a_white_lid_stay_separate() -> None:
+    """Prints that cover the border used to pull the lid estimate onto themselves."""
+
+    image = np.full((1400, 1000, 3), 230, np.uint8)
+    photos = [
+        {"color": (180, 40, 50), "center": (250, 280), "size": (500, 560), "angle": 0},
+        {"color": (40, 90, 170), "center": (740, 260), "size": (380, 520), "angle": 0},
+        {"color": (40, 140, 80), "center": (250, 1100), "size": (500, 640), "angle": 0},
+        {"color": (150, 120, 40), "center": (740, 1080), "size": (400, 640), "angle": 0},
+    ]
+    for photo in photos:
+        paint_photo(
+            image,
+            photo["color"],  # type: ignore[arg-type]
+            photo["center"],  # type: ignore[arg-type]
+            photo["size"],  # type: ignore[arg-type]
+            float(photo["angle"]),
+        )
+    # The bezel covers the lid on the top and the right. The left and the bottom
+    # are the prints themselves, with a strip of lid left on the bottom edge.
+    image[:3, :] = 28
+    image[:, -3:] = 28
+    regions = OpenCvPhotoDetector().detect(image)
+    assert len(regions) == 4
+    for photo in photos:
+        center_x, center_y = photo["center"]  # type: ignore[misc]
+        region = min(
+            regions,
+            key=lambda item: (item.center_x - center_x) ** 2 + (item.center_y - center_y) ** 2,
+        )
+        assert abs(region.center_x - center_x) < 40
+        assert abs(region.center_y - center_y) < 40
+
+
+def test_print_on_the_edge_of_a_black_lid_is_not_taken_for_the_lid() -> None:
+    image = np.full((900, 700, 3), 8, np.uint8)
+    paint_photo(
+        image, (230, 220, 210), (160, 430), (360, 520), 0, border=8, border_color=(30, 30, 30)
+    )
+    paint_photo(image, (40, 90, 160), (520, 620), (260, 200), -6)
+    regions = OpenCvPhotoDetector().detect(image)
+    assert len(regions) == 2
+    edge = min(regions, key=lambda item: item.center_x)
+    assert abs(edge.center_x - 160) < 30
+    assert abs(edge.center_y - 430) < 30
+
+
 def test_thin_l_shaped_shadow_is_not_a_photo() -> None:
     image = np.full((900, 700, 3), 250, np.uint8)
     image[100:112, 100:600] = (30, 30, 30)
