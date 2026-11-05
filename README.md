@@ -99,7 +99,7 @@ Retouch runs on the same single worker as detection and upload, so a slow retouc
 
 The stages that are switched on run in this order:
 
-- Fill scratches with LaMa. The mask follows a light or dark stroke, including a crease that fades along its length, and leaves a filled area alone. LaMa runs at full resolution on the 512×512 tiles that hold a scratch.
+- Fill scratches with LaMa. The mask follows a light or dark stroke, including a crease that fades along its length, and leaves a filled area alone. On a fold it covers the cracks and the tear's shoulder, not the whole band, so a medal or a print pattern that runs under the fold is kept. LaMa runs at full resolution on the 512×512 tiles that hold a scratch, and overlapping tiles are cross-faded.
 - Colorize with DDColor. Lightness stays from the scan. A high-key or flat scan is given a fixed tone curve on the model input only; without that, this export stays gray and a few of its pixels resize into colored dots.
 - Upscale, denoise, or both, as one Real-ESRGAN pass. The official pair is two 4× networks, not a 1× denoiser. Upscale alone uses `realesr-general-wdn-x4v3` (denoise strength 0, keep texture) and keeps the 4× image. Denoise alone uses `realesr-general-x4v3` (denoise strength 1) and resizes that result back to the crop with Lanczos, which is the official `outscale` of 1. Both use `realesr-general-x4v3` once and keep the 4× image. A second pass would enlarge twice, so it is not run.
 - Restore faces with GFPGAN. This invents detail. It stays off unless chosen for that photo, and the preview says it is a reconstruction. Faces see the image that will be saved, so they run on the enlargement only when upscale is on.

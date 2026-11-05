@@ -9,6 +9,11 @@ _MIN_LENGTH = 0.012
 _STRONG = 40
 _HAIRLINE = 24
 _BRIDGE = 16
+# Gray levels a band pixel must differ from the picture continued across the band.
+_DEVIATION = 16
+# Top-hat and black-hat level for a crack inside the fold corridor.
+_CRACK = 13
+_SPECK = 40
 
 
 def scratch_mask(image: np.ndarray) -> np.ndarray:
@@ -32,12 +37,95 @@ def scratch_mask(image: np.ndarray) -> np.ndarray:
     bridged = _bridge(seeds, _line_response(gray, wide), search=max(14, thickness + 6))
     radius = max(12, int(round(short * 0.013)))
     min_span = max(80, int(round(short * 0.02)))
-    covered = _widen_creases(bridged, radius=radius, min_span=min_span)
+    widened = _widen_creases(bridged, radius=radius, min_span=min_span)
     # After the fold band. Attaching first would join stray marks into a fold.
-    covered = _attach_fragments(covered, fine)
-    covered = _cover_ridge(gray, covered)
+    attached = _attach_fragments(widened, fine)
+    strokes = seeds | bridged | (attached & ~widened)
+    covered = _cover_ridge(gray, attached)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    return cv2.dilate(covered.astype(np.uint8), kernel).astype(bool)
+    band = cv2.dilate(covered.astype(np.uint8), kernel).astype(bool)
+    reach = max(6, int(round(short * 0.006)))
+    return _tighten(gray, band, strokes, reach=reach, min_span=min_span)
+
+
+def _tighten(
+    gray: np.ndarray,
+    band: np.ndarray,
+    strokes: np.ndarray,
+    *,
+    reach: int,
+    min_span: int,
+) -> np.ndarray:
+    """Keep the cracks inside the band, not the whole band.
+
+    A fold band is much wider than its cracks. Filling all of it erases whatever
+    runs under the fold: medals, a dress print, fingers. Thin light or dark lines
+    close to the stroke are kept. So is a wide lift that runs along the stroke,
+    like a tear's shoulder. A shape that only crosses the fold stays in the photo.
+    """
+
+    if not band.any():
+        return band
+    corridor = cv2.dilate(strokes.astype(np.uint8), _kernel(2 * reach + 1)).astype(bool) & band
+    small = _kernel(9)
+    light = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, small)
+    dark = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, small)
+    cracks = corridor & ((light >= _CRACK) | (dark >= _CRACK)) | (strokes & band)
+    tight = cracks | _shoulders(gray, band, cracks, corridor, min_span)
+    tight = cv2.morphologyEx(tight.astype(np.uint8), cv2.MORPH_CLOSE, _kernel(5))
+    count, labels, stats, _centroids = cv2.connectedComponentsWithStats(tight, connectivity=8)
+    keep = np.zeros(count, dtype=bool)
+    keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= _SPECK
+    tight = keep[labels].astype(np.uint8)
+    return cv2.dilate(tight, _kernel(5)).astype(bool) & band
+
+
+def _shoulders(
+    gray: np.ndarray,
+    band: np.ndarray,
+    cracks: np.ndarray,
+    corridor: np.ndarray,
+    min_span: int,
+) -> np.ndarray:
+    """Pixels beside a crack that run along it and differ from the band painted in from outside.
+
+    An edge further out in the band, like the top of a hand under a fold, is part of the photo.
+    """
+
+    height, width = gray.shape
+    factor = 4 if min(height, width) >= 1200 else 1
+    holes: np.ndarray = band.astype(np.uint8) * 255
+    if factor > 1:
+        small = (max(1, width // factor), max(1, height // factor))
+        low_gray = cv2.resize(gray, small, interpolation=cv2.INTER_AREA)
+        holes = cv2.resize(holes, small, interpolation=cv2.INTER_AREA)
+    else:
+        low_gray = gray
+    holes = cv2.dilate(np.where(holes > 0, 255, 0).astype(np.uint8), _kernel(3))
+    background = cv2.inpaint(low_gray, holes, 3, cv2.INPAINT_TELEA)
+    if factor > 1:
+        background = cv2.resize(background, (width, height), interpolation=cv2.INTER_LINEAR)
+    deviation = np.abs(gray.astype(np.int16) - background.astype(np.int16))
+    # Away from the cracks, so a medal beside one is judged on its own shape.
+    near = cv2.dilate(cracks.astype(np.uint8), _kernel(5)).astype(bool)
+    lifted = (corridor & ~near & (deviation >= _DEVIATION)).astype(np.uint8)
+    found = np.zeros(band.shape, dtype=bool)
+    count, labels, stats, _centroids = cv2.connectedComponentsWithStats(lifted, connectivity=8)
+    for label in range(1, count):
+        w = int(stats[label, cv2.CC_STAT_WIDTH])
+        h = int(stats[label, cv2.CC_STAT_HEIGHT])
+        if max(w, h) < min_span:
+            continue
+        x = int(stats[label, cv2.CC_STAT_LEFT])
+        y = int(stats[label, cv2.CC_STAT_TOP])
+        selected = labels[y : y + h, x : x + w] == label
+        if _elongated(selected, min_span):
+            found[y : y + h, x : x + w] |= selected
+    return found
+
+
+def _kernel(size: int) -> np.ndarray:
+    return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
 
 
 def _line_response(gray: np.ndarray, length: int) -> np.ndarray:

@@ -88,13 +88,22 @@ def masked_tiles(
     """Run `run(tile, tile_mask)` at full resolution on each tile that holds a masked pixel.
 
     `tile_mask` is uint8 with 1 marking the hole. Only masked pixels take the output.
+    Where tiles overlap, their fills are cross-faded, so a hole that spans two tiles
+    has no seam where one tile's guess meets the next.
     """
 
     height, width = image.shape[:2]
-    work_h, work_w, _overlap, starts_y, starts_x = _grid(height, width, tile_h, tile_w, overlap)
+    work_h, work_w, overlap, starts_y, starts_x = _grid(height, width, tile_h, tile_w, overlap)
     working = _pad(image, work_h, work_w)
     holes = _holes(mask, work_h, work_w)
     result = working.copy()
+    flat = np.flatnonzero(holes)
+    if flat.size == 0:
+        return result[:height, :width]
+    channels = working.shape[2]
+    total = np.zeros((flat.size, channels), dtype=np.float32)
+    weights = np.zeros(flat.size, dtype=np.float32)
+    window = _rect_window(tile_h, tile_w, overlap)
     for y in starts_y:
         for x in starts_x:
             tile_mask = holes[y : y + tile_h, x : x + tile_w]
@@ -103,12 +112,28 @@ def masked_tiles(
             output = run(working[y : y + tile_h, x : x + tile_w], tile_mask)
             if output.shape[:2] != (tile_h, tile_w):
                 output = cv2.resize(output, (tile_w, tile_h), interpolation=cv2.INTER_CUBIC)
-            target = result[y : y + tile_h, x : x + tile_w]
-            hole = tile_mask.astype(bool)
-            target[hole] = output[hole]
+            ys, xs = np.nonzero(tile_mask)
+            index = np.searchsorted(flat, (ys + y) * work_w + (xs + x))
+            weight = window[ys, xs]
+            total[index] += output[ys, xs].astype(np.float32) * weight[:, None]
+            weights[index] += weight
             if on_tile is not None:
                 on_tile()
+    filled = np.clip(np.rint(total / np.maximum(weights, 1e-6)[:, None]), 0, 255)
+    result.reshape(-1, channels)[flat] = filled.astype(np.uint8)
     return result[:height, :width]
+
+
+def _rect_window(tile_h: int, tile_w: int, overlap: int) -> np.ndarray:
+    def ramp(size: int) -> np.ndarray:
+        values = np.ones(size, dtype=np.float32)
+        if overlap > 0:
+            slope = np.linspace(0, 1, overlap + 1, dtype=np.float32)[1:]
+            values[:overlap] = slope
+            values[-overlap:] = np.minimum(values[-overlap:], slope[::-1])
+        return values
+
+    return np.minimum(ramp(tile_h)[:, None], ramp(tile_w)[None, :])
 
 
 def masked_tile_count(mask: np.ndarray, tile_h: int, tile_w: int, overlap: int) -> int:

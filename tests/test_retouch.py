@@ -151,6 +151,24 @@ def test_lama_gets_a_full_mask_at_full_resolution(tmp_path) -> None:
     assert np.all(out[:, 299] == 90)
 
 
+def test_overlapping_fill_tiles_fade_into_each_other() -> None:
+    image = np.full((100, 960, 3), 90, dtype=np.uint8)
+    mask = np.zeros(image.shape[:2], dtype=bool)
+    mask[50, :] = True
+    calls = [0]
+
+    def guess(tile: np.ndarray, _mask: np.ndarray) -> np.ndarray:
+        calls[0] += 1
+        return np.full_like(tile, 100 if calls[0] == 1 else 200)
+
+    out = masked_tiles(image, mask, guess, tile_h=100, tile_w=512, overlap=64)
+    row = out[50, :, 0].astype(int)
+    assert calls[0] == 2
+    assert row[0] == 100 and row[-1] == 200
+    assert np.abs(np.diff(row)).max() <= 4
+    assert np.all(out[49] == 90)
+
+
 def test_upscale_output_overshoot_is_clipped_not_rescaled() -> None:
     class Input:
         name = "input"
@@ -576,6 +594,23 @@ def test_scratch_mask_covers_the_shoulder_of_a_wide_tear() -> None:
     assert mask[96, 120]
     assert not mask[40, 40]
     assert not mask[10, 10]
+
+
+def test_scratch_mask_leaves_what_runs_under_a_fold() -> None:
+    image = np.full((600, 900, 3), 80, dtype=np.uint8)
+    image[200:420, 380:440] = 220
+    for x in range(20, 880):
+        y = int(300 + 3 * np.sin(x / 40))
+        image[y - 6 : y + 6, x] = 45
+        image[y - 4 : y - 2, x] = 235
+        image[y + 2 : y + 4, x] = 235
+    mask = scratch_mask(image)
+    assert mask[296, 200]
+    assert mask[302, 700]
+    assert mask[298, 410]
+    assert not mask[285, 410]
+    assert not mask[308, 410]
+    assert mask[200:420, 380:440].mean() < 0.1
 
 
 def test_identity_face_alignment_changes_only_the_interior() -> None:
