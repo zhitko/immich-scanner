@@ -27,6 +27,7 @@ from app.retouch.fetch import (
     prepare_download,
     progress_for,
 )
+from app.retouch.folds import even_fold_shading
 from app.retouch.imageops import (
     FACE_TEMPLATE,
     apply_ab,
@@ -53,7 +54,7 @@ from app.retouch.progress import (
     set_retouch_progress,
     set_retouch_stage,
 )
-from app.retouch.scratch import scratch_mask
+from app.retouch.scratch import Fold, scratch_mask
 from app.retouch.session import execution_providers
 from tests.synthetic import encode_png, make_bed
 from tests.test_api import RecordingImmich, _import_bed
@@ -611,6 +612,45 @@ def test_scratch_mask_leaves_what_runs_under_a_fold() -> None:
     assert not mask[285, 410]
     assert not mask[308, 410]
     assert mask[200:420, 380:440].mean() < 0.1
+
+
+def _shaded_fold(top: int, bottom: int) -> tuple[np.ndarray, np.ndarray, Fold]:
+    image = np.zeros((600, 800, 3), dtype=np.uint8)
+    image[:300] = top
+    image[300:] = bottom
+    image[:, ::40] = (bottom + top) // 2
+    shadow = 1.0 - 0.3 * np.exp(-np.arange(300) / 25.0)
+    image[300:] = np.rint(image[300:] * shadow[:, None, None]).astype(np.uint8)
+    mask = np.zeros(image.shape[:2], dtype=bool)
+    mask[290:300] = True
+    along = np.arange(800)
+    return image, mask, Fold("h", along, np.full(800, 295.0), 40)
+
+
+def test_fold_shadow_is_lifted_and_the_far_print_kept() -> None:
+    image, mask, fold = _shaded_fold(120, 120)
+    evened = even_fold_shading(image, [fold], mask)
+    assert int(image[310, 410, 0]) < 100
+    assert abs(int(evened[310, 410, 0]) - 120) <= 8
+    assert np.array_equal(evened[:100], image[:100])
+    assert np.array_equal(evened[500:], image[500:])
+
+    turned = even_fold_shading(
+        np.ascontiguousarray(image.transpose(1, 0, 2)),
+        [Fold("v", fold.along, fold.centers, fold.radius)],
+        np.ascontiguousarray(mask.T),
+    )
+    assert np.array_equal(turned, evened.transpose(1, 0, 2))
+
+
+def test_fold_step_eases_out_but_the_sides_keep_their_levels() -> None:
+    image, mask, fold = _shaded_fold(150, 100)
+    evened = even_fold_shading(image, [fold], mask).astype(int)
+    assert abs(evened[305, 410, 0] - evened[285, 410, 0]) < abs(
+        int(image[305, 410, 0]) - int(image[285, 410, 0])
+    )
+    assert evened[100, 410, 0] == 150
+    assert evened[560, 410, 0] == 100
 
 
 def test_identity_face_alignment_changes_only_the_interior() -> None:

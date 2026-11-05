@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import cv2
 import numpy as np
 
@@ -16,7 +18,21 @@ _CRACK = 13
 _SPECK = 40
 
 
+@dataclass(frozen=True)
+class Fold:
+    """The centre line of one fold. `axis` is "h" when it runs along the rows."""
+
+    axis: str
+    along: np.ndarray
+    centers: np.ndarray
+    radius: int
+
+
 def scratch_mask(image: np.ndarray) -> np.ndarray:
+    return scratch_regions(image)[0]
+
+
+def scratch_regions(image: np.ndarray) -> tuple[np.ndarray, list[Fold]]:
     """Light or dark strokes, including a crease that fades along its length.
 
     Filled areas are left alone. A fold is covered as one band, including the
@@ -37,7 +53,7 @@ def scratch_mask(image: np.ndarray) -> np.ndarray:
     bridged = _bridge(seeds, _line_response(gray, wide), search=max(14, thickness + 6))
     radius = max(12, int(round(short * 0.013)))
     min_span = max(80, int(round(short * 0.02)))
-    widened = _widen_creases(bridged, radius=radius, min_span=min_span)
+    widened, folds = _widen_creases(bridged, radius=radius, min_span=min_span)
     # After the fold band. Attaching first would join stray marks into a fold.
     attached = _attach_fragments(widened, fine)
     strokes = seeds | bridged | (attached & ~widened)
@@ -45,7 +61,7 @@ def scratch_mask(image: np.ndarray) -> np.ndarray:
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     band = cv2.dilate(covered.astype(np.uint8), kernel).astype(bool)
     reach = max(6, int(round(short * 0.006)))
-    return _tighten(gray, band, strokes, reach=reach, min_span=min_span)
+    return _tighten(gray, band, strokes, reach=reach, min_span=min_span), folds
 
 
 def _tighten(
@@ -384,7 +400,9 @@ def _paint_gap(
                 mask[yy, x] = True
 
 
-def _widen_creases(mask: np.ndarray, *, radius: int, min_span: int) -> np.ndarray:
+def _widen_creases(
+    mask: np.ndarray, *, radius: int, min_span: int
+) -> tuple[np.ndarray, list[Fold]]:
     """A thick stroke that keeps going is a fold. Cover one solid band around it.
 
     Pieces of the same fold are joined across the gaps where the paper is pale and
@@ -394,9 +412,14 @@ def _widen_creases(mask: np.ndarray, *, radius: int, min_span: int) -> np.ndarra
     covered = np.array(mask, copy=True)
     height, width = mask.shape
     segments = _thick_runs(mask, min_span)
-    _paint_bands(covered, [seg for seg in segments if seg[0] == "h"], radius, height, width, axis=0)
-    _paint_bands(covered, [seg for seg in segments if seg[0] == "v"], radius, height, width, axis=1)
-    return covered
+    folds: list[Fold] = []
+    for kind, axis in (("h", 0), ("v", 1)):
+        runs = [seg for seg in segments if seg[0] == kind]
+        for chain in _paint_bands(covered, runs, radius, height, width, axis=axis):
+            along = np.array(sorted(chain), dtype=np.int64)
+            centers = np.array([chain[pos] for pos in along], dtype=np.float64)
+            folds.append(Fold(kind, along, centers, radius))
+    return covered, folds
 
 
 def _thick_runs(mask: np.ndarray, min_span: int) -> list[tuple[str, dict[int, int]]]:
@@ -439,7 +462,7 @@ def _paint_bands(
     width: int,
     *,
     axis: int,
-) -> None:
+) -> list[dict[int, int]]:
     ordered = sorted((centers for _kind, centers in runs), key=lambda item: min(item))
     along = width if axis == 0 else height
     cross = height if axis == 0 else width
@@ -473,6 +496,7 @@ def _paint_bands(
                 covered[start:end, pos] = True
             else:
                 covered[pos, start:end] = True
+    return chains
 
 
 def _cover_ridge(gray: np.ndarray, mask: np.ndarray) -> np.ndarray:

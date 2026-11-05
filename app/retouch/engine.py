@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 
 from app.retouch.catalog import CATALOG, ModelSpec, restoration_for, specs_for
+from app.retouch.folds import even_fold_shading
 from app.retouch.imageops import (
     apply_ab,
     as_nchw,
@@ -24,7 +25,7 @@ from app.retouch.imageops import (
     warp_face,
 )
 from app.retouch.options import RetouchOptions
-from app.retouch.scratch import scratch_mask
+from app.retouch.scratch import scratch_regions
 from app.retouch.session import open_session
 
 _LAMA_SIZE = 512
@@ -82,7 +83,7 @@ class OnnxRetoucher:
         result = image
         if options.scratches:
             _announce(on_stage, "Filling scratches")
-            mask = scratch_mask(result)
+            mask, folds = scratch_regions(result)
             if budget is not None:
                 budget.add(_MASK_UNITS)
             if mask.any():
@@ -96,6 +97,9 @@ class OnnxRetoucher:
                     mask,
                     on_tile=None if budget is None else lambda: budget.add(1),
                 )
+            # After the fill. Evened first, the hole's edge reads as a line and the fill redraws it.
+            if folds:
+                result = even_fold_shading(result, folds, mask)
         if options.colorize:
             _announce(on_stage, "Colorizing")
             result = self._colorize(result)
