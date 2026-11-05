@@ -1,8 +1,10 @@
 import {
   chosenVersion,
   displayedAspect,
+  formatPhotoFacts,
   previewCacheKey,
   shownVersion,
+  uprightPixels,
   uploadVersionLabel,
 } from './preview';
 
@@ -40,6 +42,39 @@ describe('retouch preview choice', () => {
     expect(shownVersion('crop', true, true)).toBe('retouch');
     expect(shownVersion('retouch', true, true)).toBe('crop');
     expect(shownVersion('crop', false, true)).toBe('crop');
+  });
+
+  it('describes the upright crop under the large preview', () => {
+    const region = {
+      width: 1800.4,
+      height: 1200.2,
+      quarter_turns: 0,
+      retouch_upscale: false,
+    };
+    expect(uprightPixels(1800.4, 1200.2, 0)).toEqual({ width: 1800, height: 1200 });
+    expect(uprightPixels(1800.4, 1200.2, 1)).toEqual({ width: 1200, height: 1800 });
+    expect(formatPhotoFacts(region, 600, 'crop')).toBe(
+      '1800 × 1200 px · 2.2 MP · 600 dpi · 7.6 × 5.1 cm',
+    );
+    expect(formatPhotoFacts(region, null, 'crop')).toBe('1800 × 1200 px · 2.2 MP');
+    expect(formatPhotoFacts({ ...region, width: 40, height: 30 }, 600, 'crop')).toBe(
+      '40 × 30 px · 600 dpi · 2 × 1 mm',
+    );
+  });
+
+  it('uses the enlarged file when the retouch on screen was upscaled', () => {
+    const region = {
+      width: 800,
+      height: 600,
+      quarter_turns: 0,
+      retouch_upscale: true,
+    };
+    expect(formatPhotoFacts(region, 300, 'crop')).toBe(
+      '800 × 600 px · 0.5 MP · 300 dpi · 6.8 × 5.1 cm',
+    );
+    expect(formatPhotoFacts(region, 300, 'retouch')).toBe(
+      '3200 × 2400 px · 7.7 MP · 1200 dpi · 6.8 × 5.1 cm',
+    );
   });
 
   it('says which pixels an upload will send', () => {

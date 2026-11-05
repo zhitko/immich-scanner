@@ -1338,12 +1338,27 @@ details.section[open] > summary {
 .lightbox-close:hover:not(:disabled) {
   background: rgba(20, 22, 28, 0.9);
 }
+.lightbox-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 92vw;
+}
+.lightbox-meta {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
 .lightbox-frame {
   --aspect: 1;
   --turns: 0;
   container-type: size;
   position: relative;
-  width: min(92vw, calc((100dvh - 112px) * var(--aspect)));
+  width: min(92vw, calc((100dvh - 168px) * var(--aspect)));
   aspect-ratio: var(--aspect);
 }
 .lightbox-frame img {

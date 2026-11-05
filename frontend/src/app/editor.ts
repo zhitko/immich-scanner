@@ -36,6 +36,7 @@ import { Album, Region, RegionMetadata, RetouchModel, ScanDetail } from './model
 import {
   chosenVersion,
   displayedAspect,
+  formatPhotoFacts,
   PhotoVersion,
   previewCacheKey,
   shownVersion,
@@ -274,6 +275,11 @@ export class EditorPage {
 
   frameAspect(region: Region): number {
     return displayedAspect(region.width, region.height, region.quarter_turns);
+  }
+
+  /** Resolution, density, and print size for the version open in the lightbox. */
+  photoFacts(region: Region): string {
+    return formatPhotoFacts(region, this.scan()?.dpi ?? null, this.lightboxShown(region));
   }
 
   bedUrl(): string {

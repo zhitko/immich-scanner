@@ -596,34 +596,39 @@
           </svg>
         </button>
         <div
-          class="lightbox-frame comparable"
-          [class.can-compare]="photo.retouch_ready"
-          [style.--aspect]="frameAspect(photo)"
-          tabindex="-1"
+          class="lightbox-stage"
           (click)="$event.stopPropagation()"
           (keydown)="$event.stopPropagation()"
-          (pointerdown)="hold('lightbox', $event)"
-          (pointerleave)="release()"
-          (contextmenu)="photo.retouch_ready && $event.preventDefault()"
         >
-          @for (version of frameVersions(photo); track version) {
-            <img
-              draggable="false"
-              [class.sideways]="versionTurns(photo, version) % 2 === 1"
-              [class.hidden]="lightboxShown(photo) !== version"
-              [style.--turns]="versionTurns(photo, version)"
-              [src]="versionUrl(photo, version)"
-              [alt]="versionAlt(photo, version)"
-            />
-          }
-          @if (lightboxShown(photo) === 'retouch' && photo.retouch_reconstructs_faces) {
-            <span class="reconstruction">Reconstruction</span>
-          }
-          @if (photo.retouch_ready) {
-            <span class="version-tag">
-              {{ versionName(lightboxShown(photo)) }} · hold to compare
-            </span>
-          }
+          <div
+            class="lightbox-frame comparable"
+            [class.can-compare]="photo.retouch_ready"
+            [style.--aspect]="frameAspect(photo)"
+            tabindex="-1"
+            (pointerdown)="hold('lightbox', $event)"
+            (pointerleave)="release()"
+            (contextmenu)="photo.retouch_ready && $event.preventDefault()"
+          >
+            @for (version of frameVersions(photo); track version) {
+              <img
+                draggable="false"
+                [class.sideways]="versionTurns(photo, version) % 2 === 1"
+                [class.hidden]="lightboxShown(photo) !== version"
+                [style.--turns]="versionTurns(photo, version)"
+                [src]="versionUrl(photo, version)"
+                [alt]="versionAlt(photo, version)"
+              />
+            }
+            @if (lightboxShown(photo) === 'retouch' && photo.retouch_reconstructs_faces) {
+              <span class="reconstruction">Reconstruction</span>
+            }
+            @if (photo.retouch_ready) {
+              <span class="version-tag">
+                {{ versionName(lightboxShown(photo)) }} · hold to compare
+              </span>
+            }
+          </div>
+          <p class="lightbox-meta">{{ photoFacts(photo) }}</p>
         </div>
       </div>
     }
