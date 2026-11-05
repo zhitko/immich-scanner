@@ -179,6 +179,22 @@
         <label class="check">
           <input
             type="checkbox"
+            [checked]="settings.retouch_scratches"
+            (change)="setStep('retouch_scratches', $any($event.target).checked)"
+          />
+          Fill scratches
+        </label>
+        <label class="check">
+          <input
+            type="checkbox"
+            [checked]="settings.retouch_colorize"
+            (change)="setStep('retouch_colorize', $any($event.target).checked)"
+          />
+          Colorize
+        </label>
+        <label class="check">
+          <input
+            type="checkbox"
             [checked]="settings.retouch_upscale"
             (change)="setStep('retouch_upscale', $any($event.target).checked)"
           />
@@ -195,22 +211,6 @@
         <p class="hint">
           Invents detail that was not on the print. The preview is marked as a reconstruction.
         </p>
-        <label class="check">
-          <input
-            type="checkbox"
-            [checked]="settings.retouch_colorize"
-            (change)="setStep('retouch_colorize', $any($event.target).checked)"
-          />
-          Colorize
-        </label>
-        <label class="check">
-          <input
-            type="checkbox"
-            [checked]="settings.retouch_scratches"
-            (change)="setStep('retouch_scratches', $any($event.target).checked)"
-          />
-          Fill scratches
-        </label>
 
         <div class="model-list">
           <p class="hint">

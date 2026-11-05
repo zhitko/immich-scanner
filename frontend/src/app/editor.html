@@ -340,6 +340,24 @@
                   <label class="check">
                     <input
                       type="checkbox"
+                      [checked]="region.retouch_scratches"
+                      (change)="setRetouch('retouch_scratches', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
+                    Fill scratches
+                  </label>
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [checked]="region.retouch_colorize"
+                      (change)="setRetouch('retouch_colorize', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
+                    Colorize
+                  </label>
+                  <label class="check">
+                    <input
+                      type="checkbox"
                       [checked]="region.retouch_upscale"
                       (change)="setRetouch('retouch_upscale', $any($event.target).checked)"
                       [disabled]="busy() || retouchingRegion(region)"
@@ -359,24 +377,6 @@
                     Invents detail that was not on the print. Off unless you choose it, and the
                     preview is marked as a reconstruction.
                   </p>
-                  <label class="check">
-                    <input
-                      type="checkbox"
-                      [checked]="region.retouch_colorize"
-                      (change)="setRetouch('retouch_colorize', $any($event.target).checked)"
-                      [disabled]="busy() || retouchingRegion(region)"
-                    />
-                    Colorize
-                  </label>
-                  <label class="check">
-                    <input
-                      type="checkbox"
-                      [checked]="region.retouch_scratches"
-                      (change)="setRetouch('retouch_scratches', $any($event.target).checked)"
-                      [disabled]="busy() || retouchingRegion(region)"
-                    />
-                    Fill scratches
-                  </label>
                   <button
                     type="button"
                     (click)="runRetouch()"
