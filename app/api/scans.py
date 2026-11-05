@@ -8,14 +8,24 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_services, get_session
 from app.clock import utcnow
 from app.geometry import ensure_geometry
-from app.imaging.preview import region_preview
+from app.imaging.preview import drop_previews, region_preview, retouch_preview
 from app.jobs.handlers import refresh_upload_state
 from app.jobs.queue import enqueue_job
 from app.models import Region, Scan
+from app.retouch.options import retouch_is_current, sync_retouch_status
 from app.runtime import Services
-from app.schemas import RegionCreate, RegionOut, RegionPatch, ScanDetail, ScanSummary, UploadRequest
+from app.schemas import (
+    RegionCreate,
+    RegionOut,
+    RegionPatch,
+    RetouchQueued,
+    RetouchRequest,
+    ScanDetail,
+    ScanSummary,
+    UploadRequest,
+)
 from app.serialize import region_out, scan_detail, scan_summary
-from app.settings_store import load_settings
+from app.settings_store import load_settings, retouch_columns
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 
@@ -27,6 +37,18 @@ _META_FIELDS = {
     "longitude",
     "rating",
     "visibility",
+}
+_RETOUCH_FIELDS = {
+    "center_x",
+    "center_y",
+    "width",
+    "height",
+    "angle_deg",
+    "quarter_turns",
+    "retouch_upscale",
+    "retouch_faces",
+    "retouch_colorize",
+    "retouch_scratches",
 }
 
 
@@ -147,6 +169,7 @@ def create_region(
     )
     positions = session.scalars(select(Region.position).where(Region.scan_id == scan.id)).all()
     now = utcnow()
+    stored = load_settings(session)
     region = Region(
         id=str(uuid4()),
         scan_id=scan.id,
@@ -159,7 +182,7 @@ def create_region(
         quarter_turns=0,
         taken_at=None,
         description="",
-        album_id=load_settings(session).default_album_id or None,
+        album_id=stored.default_album_id or None,
         latitude=None,
         longitude=None,
         is_favorite=False,
@@ -175,6 +198,7 @@ def create_region(
         uploaded_at=None,
         created_at=now,
         updated_at=now,
+        **retouch_columns(stored),
     )
     session.add(region)
     session.flush()
@@ -205,6 +229,7 @@ def rotate_region(
     region = _region(session, _scan(session, scan_id), region_id)
     region.quarter_turns = (region.quarter_turns + (1 if clockwise else 3)) % 4
     region.updated_at = utcnow()
+    sync_retouch_status(region)
     return region_out(region)
 
 
@@ -213,12 +238,63 @@ def delete_region(
     scan_id: str,
     region_id: str,
     session: Session = Depends(get_session),
+    services: Services = Depends(get_services),
 ) -> None:
     scan = _scan(session, scan_id)
     region = _region(session, scan, region_id)
+    kept = [path for path in (region.crop_path, region.retouch_path) if path]
     session.delete(region)
     session.flush()
     refresh_upload_state(session, scan)
+    for path in kept:
+        services.storage.absolute(path).unlink(missing_ok=True)
+    drop_previews(services, scan.id, region_id)
+
+
+@router.post(
+    "/{scan_id}/regions/{region_id}/retouch", response_model=RetouchQueued, status_code=202
+)
+def retouch_region(
+    scan_id: str,
+    region_id: str,
+    body: RetouchRequest,
+    session: Session = Depends(get_session),
+) -> RetouchQueued:
+    scan = _scan(session, scan_id)
+    _require_files(scan)
+    region = _region(session, scan, region_id)
+    region.retouch_upscale = body.upscale
+    region.retouch_faces = body.faces
+    region.retouch_colorize = body.colorize
+    region.retouch_scratches = body.scratches
+    region.updated_at = utcnow()
+    job = enqueue_job(
+        session,
+        job_type="retouch",
+        scan_id=scan.id,
+        region_id=region.id,
+        payload={"scan_id": scan.id, "region_id": region.id},
+    )
+    region.retouch_status = "queued"
+    region.retouch_error = None
+    session.flush()
+    return RetouchQueued(job_id=job.id, region=region_out(region))
+
+
+@router.get("/{scan_id}/regions/{region_id}/retouch-preview")
+def preview_retouch(
+    scan_id: str,
+    region_id: str,
+    session: Session = Depends(get_session),
+    services: Services = Depends(get_services),
+) -> FileResponse:
+    scan = _scan(session, scan_id)
+    region = _region(session, scan, region_id)
+    try:
+        path = retouch_preview(services, scan, region)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @router.get("/{scan_id}/regions/{region_id}/preview")
@@ -276,6 +352,18 @@ def _apply_patch(scan: Scan, region: Region, body: RegionPatch) -> None:
         region.visibility = body.visibility
     if fields & _META_FIELDS:
         region.metadata_synced = False
+    for name in ("retouch_upscale", "retouch_faces", "retouch_colorize", "retouch_scratches"):
+        if name in fields and getattr(body, name) is not None:
+            setattr(region, name, getattr(body, name))
+    if fields & _RETOUCH_FIELDS:
+        sync_retouch_status(region)
+    if "upload_source" in fields and body.upload_source is not None:
+        if body.upload_source == "retouch" and not retouch_is_current(region):
+            raise HTTPException(
+                status_code=409,
+                detail="Retouch this photo before uploading that version.",
+            )
+        region.upload_source = body.upload_source
     region.updated_at = utcnow()
 
 

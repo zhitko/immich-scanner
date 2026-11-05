@@ -6,13 +6,17 @@ from sqlalchemy import select, update
 from app.clock import utcnow
 from app.jobs.handlers import handle_detect, handle_upload
 from app.models import Job
+from app.retouch.job import abandon_retouch, handle_retouch
 from app.runtime import Services
 
 logger = logging.getLogger(__name__)
 
+MAX_ATTEMPTS = 3
+
 HANDLERS = {
     "detect": handle_detect,
     "upload": handle_upload,
+    "retouch": handle_retouch,
 }
 
 
@@ -36,14 +40,29 @@ class JobWorker:
             self._thread.join(timeout=5)
 
     def recover(self) -> int:
+        """Queue running jobs again. One that already took the process down too often fails."""
+
         session = self._services.session_factory()
         try:
             running = list(session.scalars(select(Job).where(Job.status == "running")))
+            requeued = 0
             for job in running:
+                if job.attempts >= MAX_ATTEMPTS:
+                    reason = (
+                        f"Stopped after {job.attempts} attempts. The server restarted while "
+                        "this job ran, possibly out of memory."
+                    )
+                    job.status = "failed"
+                    job.error = reason
+                    job.finished_at = utcnow()
+                    if job.type == "retouch":
+                        abandon_retouch(session, job, reason)
+                    continue
                 job.status = "queued"
                 job.started_at = None
+                requeued += 1
             session.commit()
-            return len(running)
+            return requeued
         finally:
             session.close()
 

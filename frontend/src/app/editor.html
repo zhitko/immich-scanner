@@ -181,7 +181,7 @@
                     [style.--aspect]="frameAspect(region)"
                     [style.--turns]="region.quarter_turns % 4"
                   >
-                    <img class="crop" [src]="previewUrl(region)" alt="Straightened crop" />
+                    <img class="crop" [src]="originalUrl(region)" alt="Straightened crop" />
                     <div class="crop-tools start">
                       <button
                         type="button"
@@ -227,6 +227,176 @@
                       </button>
                     </div>
                   </div>
+                </div>
+              </div>
+            </details>
+
+            <details
+              class="section"
+              name="inspector-section"
+              [open]="openSection() === 'retouch'"
+              (toggle)="setSectionOpen('retouch', $any($event.target).open)"
+            >
+              <summary>Retouched</summary>
+              <div class="section-body">
+                <div class="crop-box">
+                  <div
+                    class="crop-ratio comparable"
+                    [class.can-compare]="region.retouch_ready"
+                    [style.--aspect]="frameAspect(region)"
+                    (pointerdown)="hold('retouch', $event)"
+                    (pointerleave)="release()"
+                    (contextmenu)="region.retouch_ready && $event.preventDefault()"
+                  >
+                    @for (version of frameVersions(region); track version) {
+                      <img
+                        class="crop"
+                        draggable="false"
+                        [class.sideways]="versionTurns(region, version) % 2 === 1"
+                        [class.hidden]="retouchShown(region) !== version"
+                        [style.--turns]="versionTurns(region, version)"
+                        [src]="versionUrl(region, version)"
+                        [alt]="versionAlt(region, version)"
+                      />
+                    }
+                    @if (retouchShown(region) === 'retouch' && region.retouch_reconstructs_faces) {
+                      <span class="reconstruction">Reconstruction</span>
+                    }
+                    @if (region.retouch_ready) {
+                      <span class="version-tag">{{ versionName(retouchShown(region)) }}</span>
+                    }
+                    <div class="crop-tools start">
+                      <button
+                        type="button"
+                        class="icon"
+                        title="View larger"
+                        aria-label="View larger"
+                        (click)="openPreview(true)"
+                      >
+                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M15 3h6v6" />
+                          <path d="M9 21H3v-6" />
+                          <path d="M21 3 14 10" />
+                          <path d="m3 21 7-7" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="version-choice" role="group" aria-label="Which version to upload">
+                  <button
+                    type="button"
+                    [attr.aria-pressed]="region.upload_source !== 'retouch'"
+                    (click)="chooseVersion('crop')"
+                    [disabled]="busy()"
+                  >
+                    Original
+                    @if (region.upload_source !== 'retouch') {
+                      <span class="chip" data-tone="ok">Uploads</span>
+                    }
+                  </button>
+                  <button
+                    type="button"
+                    [attr.aria-pressed]="region.upload_source === 'retouch'"
+                    (click)="chooseVersion('retouch')"
+                    [disabled]="busy() || !region.retouch_ready"
+                    [title]="
+                      region.retouch_ready
+                        ? 'Upload the retouched image'
+                        : 'Run retouch before choosing it'
+                    "
+                  >
+                    Retouched
+                    @if (region.upload_source === 'retouch' && region.retouch_ready) {
+                      <span class="chip" data-tone="ok">Uploads</span>
+                    }
+                  </button>
+                </div>
+                <p class="muted small">
+                  {{ versionLabel(region) }}
+                  @if (region.retouch_ready) {
+                    Press and hold the image to see the other version.
+                  }
+                </p>
+                @if (retouchShown(region) === 'retouch' && region.retouch_reconstructs_faces) {
+                  <p class="banner small">
+                    Face restoration invents detail. This preview is a reconstruction, not the scan.
+                  </p>
+                }
+                @if (retouchingRegion(region)) {
+                  <p class="banner busy">
+                    <span class="spinner" aria-hidden="true"></span>Retouching this photo…
+                  </p>
+                }
+                @if (region.retouch_status === 'failed' && region.retouch_error) {
+                  <p class="banner warn small">{{ region.retouch_error }}</p>
+                }
+                @if (region.retouch_status === 'stale') {
+                  <p class="banner small">
+                    The crop changed. Run retouch again before uploading that version.
+                  </p>
+                }
+                <div class="retouch-options">
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [checked]="region.retouch_upscale"
+                      (change)="setRetouch('retouch_upscale', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
+                    Upscale and denoise
+                  </label>
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [checked]="region.retouch_faces"
+                      (change)="setRetouch('retouch_faces', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
+                    Restore faces
+                  </label>
+                  <p class="muted small">
+                    Invents detail that was not on the print. Off unless you choose it, and the
+                    preview is marked as a reconstruction.
+                  </p>
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [checked]="region.retouch_colorize"
+                      (change)="setRetouch('retouch_colorize', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
+                    Colorize
+                  </label>
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [checked]="region.retouch_scratches"
+                      (change)="setRetouch('retouch_scratches', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
+                    Fill scratches
+                  </label>
+                  <button
+                    type="button"
+                    (click)="runRetouch()"
+                    [disabled]="
+                      busy() || dirty() || retouchingRegion(region) || !retouchChosen(region)
+                    "
+                    [title]="dirty() ? 'Save the crop first. Retouch uses the saved crop.' : ''"
+                  >
+                    @if (retouchingRegion(region)) {
+                      <span class="spinner" aria-hidden="true"></span>Retouching…
+                    } @else {
+                      Retouch this photo
+                    }
+                  </button>
+                  @if (missingWeights(region); as missing) {
+                    <p class="muted small">
+                      Missing {{ missing }}. Weights stay out of the project. Download them under
+                      Settings after reading each license.
+                    </p>
+                  }
                 </div>
               </div>
             </details>
@@ -411,6 +581,7 @@
         aria-modal="true"
         aria-label="Photo preview"
         (click)="closePreview()"
+        (keydown.escape)="closePreview()"
       >
         <button
           #lightboxClose
@@ -425,13 +596,34 @@
           </svg>
         </button>
         <div
-          class="lightbox-frame"
-          [class.odd]="photo.quarter_turns % 2 === 1"
+          class="lightbox-frame comparable"
+          [class.can-compare]="photo.retouch_ready"
           [style.--aspect]="frameAspect(photo)"
-          [style.--turns]="photo.quarter_turns % 4"
+          tabindex="-1"
           (click)="$event.stopPropagation()"
+          (keydown)="$event.stopPropagation()"
+          (pointerdown)="hold('lightbox', $event)"
+          (pointerleave)="release()"
+          (contextmenu)="photo.retouch_ready && $event.preventDefault()"
         >
-          <img [src]="previewUrl(photo)" alt="Photo preview" />
+          @for (version of frameVersions(photo); track version) {
+            <img
+              draggable="false"
+              [class.sideways]="versionTurns(photo, version) % 2 === 1"
+              [class.hidden]="lightboxShown(photo) !== version"
+              [style.--turns]="versionTurns(photo, version)"
+              [src]="versionUrl(photo, version)"
+              [alt]="versionAlt(photo, version)"
+            />
+          }
+          @if (lightboxShown(photo) === 'retouch' && photo.retouch_reconstructs_faces) {
+            <span class="reconstruction">Reconstruction</span>
+          }
+          @if (photo.retouch_ready) {
+            <span class="version-tag">
+              {{ versionName(lightboxShown(photo)) }} · hold to compare
+            </span>
+          }
         </div>
       </div>
     }

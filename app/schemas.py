@@ -33,6 +33,17 @@ class RegionOut(BaseModel):
     uploaded_at: datetime | None
     crop_changed: bool
     needs_upload: bool
+    retouch_upscale: bool
+    retouch_faces: bool
+    retouch_colorize: bool
+    retouch_scratches: bool
+    upload_source: Literal["crop", "retouch"]
+    retouch_status: str
+    retouch_error: str | None
+    retouch_signature: str | None
+    retouch_ready: bool
+    retouch_version: str | None
+    retouch_reconstructs_faces: bool
     updated_at: datetime
 
 
@@ -81,6 +92,11 @@ class RegionPatch(BaseModel):
     is_favorite: bool | None = None
     rating: int | None = Field(default=None, ge=1, le=5)
     visibility: Visibility | None = None
+    retouch_upscale: bool | None = None
+    retouch_faces: bool | None = None
+    retouch_colorize: bool | None = None
+    retouch_scratches: bool | None = None
+    upload_source: Literal["crop", "retouch"] | None = None
 
     @field_validator("album_id")
     @classmethod
@@ -108,6 +124,55 @@ class UploadRequest(BaseModel):
     region_ids: list[str] | None = None
 
 
+class RetouchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    upscale: bool = False
+    faces: bool = False
+    colorize: bool = False
+    scratches: bool = False
+
+    @model_validator(mode="after")
+    def _one_stage(self) -> "RetouchRequest":
+        if not any((self.upscale, self.faces, self.colorize, self.scratches)):
+            raise ValueError("Choose upscale, faces, color, or scratches.")
+        return self
+
+
+class RetouchQueued(BaseModel):
+    job_id: str
+    region: RegionOut
+
+
+class ModelProgress(BaseModel):
+    received: int
+    total: int | None
+    phase: Literal["downloading", "installing"]
+
+
+class RetouchModelOut(BaseModel):
+    id: str
+    purpose: str
+    version: str
+    license_id: str
+    license_summary: str
+    source_url: str
+    filename: str
+    present: bool
+    matches_pin: bool | None
+    automatic_download: bool
+    can_download: bool
+    can_update: bool
+    can_redownload: bool
+    size_bytes: int | None
+    progress: ModelProgress | None = None
+
+
+class ModelFetch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    accept: bool = False
+    force: bool = False
+
+
 class JobOut(BaseModel):
     id: str
     type: str
@@ -133,6 +198,10 @@ class SettingsOut(BaseModel):
     scan_mode: Literal["Color", "Gray"]
     width_mm: float | None
     height_mm: float | None
+    retouch_upscale: bool
+    retouch_faces: bool
+    retouch_colorize: bool
+    retouch_scratches: bool
 
 
 class SettingsUpdate(BaseModel):
@@ -148,6 +217,10 @@ class SettingsUpdate(BaseModel):
     scan_mode: Literal["Color", "Gray"] = "Color"
     width_mm: float | None = Field(default=None, gt=0, le=400)
     height_mm: float | None = Field(default=None, gt=0, le=400)
+    retouch_upscale: bool = False
+    retouch_faces: bool = False
+    retouch_colorize: bool = False
+    retouch_scratches: bool = False
 
     @field_validator("default_album_id")
     @classmethod

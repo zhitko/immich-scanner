@@ -64,6 +64,19 @@ def crop_rotated_rect(
     )
 
 
+def upright_crop(
+    image: np.ndarray,
+    center_x: float,
+    center_y: float,
+    width: float,
+    height: float,
+    angle_deg: float,
+    quarter_turns: int,
+) -> np.ndarray:
+    cropped = crop_rotated_rect(image, center_x, center_y, width, height, angle_deg)
+    return apply_quarter_turns(cropped, quarter_turns)
+
+
 def apply_quarter_turns(image: np.ndarray, quarter_turns: int) -> np.ndarray:
     """Rotate clockwise by 90 degrees for each turn."""
 

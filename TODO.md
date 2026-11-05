@@ -17,7 +17,7 @@ Order inside each area is the order to do the work. P1 is what makes the owner's
 - [ ] **P1.** Size the "about 5 mm" gap from the scan's dpi. The close kernel is a fraction of the downscaled image (`0.008` of the short side), so the same sheet behaves differently at 300 dpi and 600 dpi.
 - [ ] **P1.** Follow the Immich asset-update API off the deprecated `PUT /api/assets/{id}` from the v3.3.5 spec. Newer releases add `PATCH` and intend to drop `PUT`. Keep the v3.3.5 call working, and select the method from the server version.
 - [ ] **P2.** When a changed crop is uploaded, the previous Immich asset is left in place and a new one is created. Offer to remove the previous asset after the new one is stored, and say so before the upload.
-- [ ] **P2.** Optional per-photo retouch, after the crop and before upload. Run it on CPU. The target laptop has Intel integrated graphics and 64 GB of RAM, so one photo at a time is the budget, not a batch of the whole bed.
+- [x] **P2.** Optional per-photo retouch, after the crop and before upload. Run it on CPU. The target laptop has Intel integrated graphics and 64 GB of RAM, so one photo at a time is the budget, not a batch of the whole bed.
   - Upscale and denoise with a small Real-ESRGAN model.
   - Face restoration with CodeFormer or GFPGAN. These invent detail. Default them off, and label the preview as a reconstruction.
   - Optional colorization with DDColor, and optional scratch inpainting with LaMa. Both off unless chosen for that photo.
@@ -27,7 +27,7 @@ Order inside each area is the order to do the work. P1 is what makes the owner's
 
 ## UI
 
-- [ ] **P2.** Before/after preview for the retouch step above, with the original crop still one click away. The choice of what gets uploaded has to be visible on the photo, not buried in settings.
+- [x] **P2.** Before/after preview for the retouch step above, with the original crop still one click away. The choice of what gets uploaded has to be visible on the photo, not buried in settings.
 - [ ] **P2.** Nudge the selected region with the keyboard. Corner dragging on a trackpad is easy to overshoot, and the only fix today is to drag again.
 - [ ] **P3.** Warn in the region list when a box overlaps another, including an already uploaded one.
 

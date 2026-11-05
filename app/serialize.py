@@ -1,22 +1,29 @@
+import hashlib
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.imaging.crop import crop_signature
 from app.jobs.handlers import needs_upload
 from app.models import Job, Region, Scan
+from app.retouch.options import (
+    flags_restore_faces,
+    geometry_signature,
+    retouch_is_current,
+    stored_geometry,
+)
 from app.schemas import RegionOut, ScanDetail, ScanSummary
 
 
+def _retouch_version(region: Region) -> str:
+    """Each retouch run writes a new path, so this changes only when the pixels do."""
+
+    return hashlib.sha1((region.retouch_path or "").encode()).hexdigest()[:12]
+
+
 def region_out(region: Region) -> RegionOut:
-    signature = crop_signature(
-        region.center_x,
-        region.center_y,
-        region.width,
-        region.height,
-        region.angle_deg,
-        region.quarter_turns,
-    )
-    changed = bool(region.uploaded_crop_signature) and region.uploaded_crop_signature != signature
+    stored = stored_geometry(region.uploaded_crop_signature)
+    changed = bool(stored) and stored != geometry_signature(region)
+    ready = retouch_is_current(region)
     return RegionOut(
         id=region.id,
         position=region.position,
@@ -43,6 +50,17 @@ def region_out(region: Region) -> RegionOut:
         uploaded_at=region.uploaded_at,
         crop_changed=changed,
         needs_upload=needs_upload(region),
+        retouch_upscale=bool(region.retouch_upscale),
+        retouch_faces=bool(region.retouch_faces),
+        retouch_colorize=bool(region.retouch_colorize),
+        retouch_scratches=bool(region.retouch_scratches),
+        upload_source=region.upload_source or "crop",
+        retouch_status=region.retouch_status or "none",
+        retouch_error=region.retouch_error,
+        retouch_signature=region.retouch_signature,
+        retouch_ready=ready,
+        retouch_version=_retouch_version(region) if ready else None,
+        retouch_reconstructs_faces=ready and flags_restore_faces(region.retouch_signature),
         updated_at=region.updated_at,
     )
 

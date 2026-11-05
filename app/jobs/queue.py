@@ -26,6 +26,8 @@ def enqueue_job(
     )
     if active is not None and job_type == "detect":
         return active
+    if active is not None and job_type == "retouch" and active.status == "queued":
+        return active
     job = Job(
         id=str(uuid4()),
         type=job_type,

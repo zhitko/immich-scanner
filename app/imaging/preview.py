@@ -9,6 +9,7 @@ import numpy as np
 from app.imaging.crop import crop_rotated_rect, crop_signature, resize_max_edge
 from app.imaging.io import load_rgb, save_rgb
 from app.models import Region, Scan
+from app.retouch.options import retouch_is_current
 from app.runtime import Services
 
 # Leave a fresh sibling in place long enough for its response to open the file.
@@ -46,6 +47,58 @@ def region_preview(services: Services, scan: Scan, region: Region) -> Path:
         os.replace(partial, path)
         _drop_expired(path, region.id)
     return path
+
+
+def retouch_preview(services: Services, scan: Scan, region: Region) -> Path:
+    if scan.files_deleted or not retouch_is_current(region) or not region.retouch_path:
+        raise FileNotFoundError("retouch is not ready")
+    path = retouch_preview_path(services, scan.id, region.id, region.retouch_path)
+    if path.is_file():
+        return path
+    source = services.storage.absolute(region.retouch_path)
+    if not source.is_file():
+        raise FileNotFoundError("retouch is not ready")
+    with _region_lock(region.id):
+        if path.is_file():
+            return path
+        image, _dpi = load_rgb(source)
+        write_retouch_preview(image, path)
+    return path
+
+
+def retouch_preview_path(
+    services: Services, scan_id: str, region_id: str, retouch_path: str
+) -> Path:
+    """Each retouch run writes a new derivative path, so a re-run gets a new preview."""
+
+    digest = hashlib.sha1(retouch_path.encode()).hexdigest()[:16]
+    return services.storage.absolute(f"scans/{scan_id}/retouch-previews/{region_id}-{digest}.jpg")
+
+
+def write_retouch_preview(image: np.ndarray, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(f".{path.name}.{threading.get_ident()}.tmp")
+    save_rgb(resize_max_edge(image, 1000), partial, "jpeg", jpeg_quality=82)
+    os.replace(partial, path)
+
+
+def drop_previews(
+    services: Services,
+    scan_id: str,
+    region_id: str,
+    *,
+    folders: tuple[str, ...] = ("previews", "retouch-previews"),
+    keep: Path | None = None,
+) -> None:
+    """Delete cached previews for one region, except `keep`."""
+
+    for folder in folders:
+        directory = services.storage.absolute(f"scans/{scan_id}/{folder}")
+        if not directory.is_dir():
+            continue
+        for old in directory.glob(f"{region_id}-*.jpg"):
+            if old != keep:
+                old.unlink(missing_ok=True)
 
 
 def _preview_path(services: Services, scan: Scan, region: Region) -> Path:

@@ -24,6 +24,10 @@ class ArchiveSettings:
     scan_mode: str = "Color"
     width_mm: float | None = None
     height_mm: float | None = None
+    retouch_upscale: bool = False
+    retouch_faces: bool = False
+    retouch_colorize: bool = False
+    retouch_scratches: bool = False
 
 
 def load_settings(session: Session) -> ArchiveSettings:
@@ -56,6 +60,10 @@ def load_settings(session: Session) -> ArchiveSettings:
         scan_mode=scan_mode,
         width_mm=_optional_mm(stored.get("width_mm", "")),
         height_mm=_optional_mm(stored.get("height_mm", "")),
+        retouch_upscale=_flag(stored.get("retouch_upscale")),
+        retouch_faces=_flag(stored.get("retouch_faces")),
+        retouch_colorize=_flag(stored.get("retouch_colorize")),
+        retouch_scratches=_flag(stored.get("retouch_scratches")),
     )
 
 
@@ -72,6 +80,10 @@ def save_settings(session: Session, settings: ArchiveSettings) -> None:
         "scan_mode": settings.scan_mode,
         "width_mm": _format_mm(settings.width_mm),
         "height_mm": _format_mm(settings.height_mm),
+        "retouch_upscale": _format_flag(settings.retouch_upscale),
+        "retouch_faces": _format_flag(settings.retouch_faces),
+        "retouch_colorize": _format_flag(settings.retouch_colorize),
+        "retouch_scratches": _format_flag(settings.retouch_scratches),
     }
     for key, value in values.items():
         row = session.get(Setting, key)
@@ -101,6 +113,10 @@ def seed_settings(session: Session, process: Settings) -> None:
         scan_mode=current.scan_mode,
         width_mm=current.width_mm,
         height_mm=current.height_mm,
+        retouch_upscale=current.retouch_upscale,
+        retouch_faces=current.retouch_faces,
+        retouch_colorize=current.retouch_colorize,
+        retouch_scratches=current.retouch_scratches,
     )
     if seeded != current or not session.get(Setting, "output_format"):
         save_settings(session, seeded)
@@ -126,6 +142,23 @@ def _optional_mm(raw: str) -> float | None:
     if not 0 < value <= 400:
         return None
     return value
+
+
+def retouch_columns(settings: ArchiveSettings) -> dict[str, bool]:
+    return {
+        "retouch_upscale": settings.retouch_upscale,
+        "retouch_faces": settings.retouch_faces,
+        "retouch_colorize": settings.retouch_colorize,
+        "retouch_scratches": settings.retouch_scratches,
+    }
+
+
+def _flag(raw: str | None) -> bool:
+    return raw == "true"
+
+
+def _format_flag(value: bool) -> str:
+    return "true" if value else "false"
 
 
 def _format_mm(value: float | None) -> str:

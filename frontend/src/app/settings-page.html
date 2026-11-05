@@ -1,6 +1,6 @@
 <section class="panel narrow">
   <h2>Settings</h2>
-  <p class="lede">Scanner options and where the photos go.</p>
+  <p class="lede">Scanner options, photo processing, and where the photos go.</p>
 
   @if (error()) {
     <p class="banner warn" role="alert">{{ error() }}</p>
@@ -168,6 +168,140 @@
         @if (!albums().length && settings.immich_base_url) {
           <p class="hint">Save the URL and key to load your albums.</p>
         }
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>Processing</legend>
+        <p class="hint">
+          New photos start with these stages selected. Retouch still runs one photo at a time, and
+          only when you ask for that photo. Photos already on a scan keep their own stages.
+        </p>
+        <label class="check">
+          <input
+            type="checkbox"
+            [checked]="settings.retouch_upscale"
+            (change)="setStep('retouch_upscale', $any($event.target).checked)"
+          />
+          Upscale and denoise
+        </label>
+        <label class="check">
+          <input
+            type="checkbox"
+            [checked]="settings.retouch_faces"
+            (change)="setStep('retouch_faces', $any($event.target).checked)"
+          />
+          Restore faces
+        </label>
+        <p class="hint">
+          Invents detail that was not on the print. The preview is marked as a reconstruction.
+        </p>
+        <label class="check">
+          <input
+            type="checkbox"
+            [checked]="settings.retouch_colorize"
+            (change)="setStep('retouch_colorize', $any($event.target).checked)"
+          />
+          Colorize
+        </label>
+        <label class="check">
+          <input
+            type="checkbox"
+            [checked]="settings.retouch_scratches"
+            (change)="setStep('retouch_scratches', $any($event.target).checked)"
+          />
+          Fill scratches
+        </label>
+
+        <div class="model-list">
+          <p class="hint">
+            Weights stay out of the project. A download runs only after you accept that model's
+            license, including when a current file is downloaded again. Each file is an ONNX
+            conversion of the official weights, checked against a pinned checksum.
+          </p>
+          @if (models(); as models) {
+            @for (model of models; track model.id) {
+              <article class="model-card">
+                <div class="model-head">
+                  <strong>{{ model.purpose }}</strong>
+                  <span class="muted small">{{ modelStatus(model) }}</span>
+                </div>
+                <p class="hint">
+                  {{ model.filename }}
+                  @if (model.size_bytes !== null) {
+                    · {{ fileSize(model.size_bytes) }}
+                  }
+                </p>
+                <details>
+                  <summary>{{ model.license_id }}</summary>
+                  <p class="hint">{{ model.license_summary }}</p>
+                  <p class="hint">
+                    <a [href]="model.source_url" target="_blank" rel="noopener">Source</a>
+                  </p>
+                </details>
+                @if (model.can_download || model.can_update || model.can_redownload) {
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [checked]="accepted()[model.id]"
+                      [disabled]="modelInFlight(model)"
+                      (change)="setAccepted(model.id, $any($event.target).checked)"
+                    />
+                    I have read the {{ model.license_id }} license
+                  </label>
+                  <div class="actions">
+                    <button
+                      type="button"
+                      [disabled]="modelInFlight(model) || !accepted()[model.id]"
+                      (click)="fetchModel(model)"
+                    >
+                      @if (modelInFlight(model)) {
+                        <span class="spinner" aria-hidden="true"></span>
+                        {{ busyLabel(model) }}
+                      } @else if (model.can_update) {
+                        Update
+                      } @else if (model.can_download) {
+                        Download
+                      } @else {
+                        Redownload
+                      }
+                    </button>
+                  </div>
+                  @if (model.progress; as progress) {
+                    <div
+                      class="meter"
+                      role="progressbar"
+                      aria-label="Download progress"
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      [attr.aria-valuenow]="
+                        progressPercent(progress) === null ? null : progressPercent(progress)
+                      "
+                      [attr.aria-valuetext]="progressLabel(progress)"
+                      [attr.data-state]="progressPercent(progress) === null ? 'unknown' : 'known'"
+                    >
+                      @if (progressPercent(progress) !== null) {
+                        <span [style.width.%]="progressPercent(progress)"></span>
+                      } @else {
+                        <span></span>
+                      }
+                    </div>
+                    <p class="hint">{{ progressLabel(progress) }}</p>
+                  }
+                }
+                @if (modelError()?.id === model.id) {
+                  <p class="banner warn small" role="alert">{{ modelError()?.message }}</p>
+                }
+                @if (modelNote()?.id === model.id) {
+                  <p class="phase small" data-tone="ok" role="status">
+                    ✓ {{ modelNote()?.message }}
+                  </p>
+                }
+              </article>
+            }
+          } @else {
+            <p class="muted small">Checking models…</p>
+          }
+        </div>
       </fieldset>
 
       <fieldset class="group">

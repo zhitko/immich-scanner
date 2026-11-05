@@ -32,8 +32,15 @@ import {
   snapAngle,
   TOUCH_TOLERANCE_PX,
 } from './geometry';
-import { Album, Region, RegionMetadata, ScanDetail } from './models';
-import { displayedAspect, previewCacheKey } from './preview';
+import { Album, Region, RegionMetadata, RetouchModel, ScanDetail } from './models';
+import {
+  chosenVersion,
+  displayedAspect,
+  PhotoVersion,
+  previewCacheKey,
+  shownVersion,
+  uploadVersionLabel,
+} from './preview';
 import { formatStamp, fromDateAndTime, toDateAndTime } from './time';
 
 interface Draft {
@@ -63,12 +70,12 @@ interface Drag {
 
 interface ActiveJob {
   id: string;
-  type: 'detect' | 'upload';
+  type: 'detect' | 'upload' | 'retouch';
   status: string;
   error: string | null;
 }
 
-type Section = 'preview' | 'details';
+type Section = 'preview' | 'retouch' | 'details';
 
 const SECTION_KEY = 'immich-scanner.inspector-section';
 const LOCATION_ERROR = 'Enter both latitude and longitude, or leave both empty.';
@@ -79,7 +86,12 @@ const DEFAULT_STROKE = '#f5f1e8';
   selector: 'app-editor',
   imports: [RouterLink],
   templateUrl: './editor.html',
-  host: { '(document:keydown)': 'onKey($event)' },
+  host: {
+    '(document:keydown)': 'onKey($event)',
+    '(document:pointerup)': 'release()',
+    '(document:pointercancel)': 'release()',
+    '(window:blur)': 'release()',
+  },
 })
 export class EditorPage {
   private readonly api = inject(ArchiveApi);
@@ -90,6 +102,7 @@ export class EditorPage {
   readonly selectedId = signal<string | null>(null);
   readonly draft = signal<Draft | null>(null);
   readonly albums = signal<Album[]>([]);
+  readonly retouchModels = signal<RetouchModel[]>([]);
   readonly immichUrl = signal('');
   readonly error = signal('');
   readonly notice = signal('');
@@ -101,6 +114,10 @@ export class EditorPage {
   readonly ratings = [1, 2, 3, 4, 5];
   readonly openSection = signal<Section | null>(storedSection());
   readonly previewOpen = signal(false);
+  /** The enlarged view follows the Retouched section only when opened from there. */
+  readonly lightboxVersion = signal(false);
+  /** Which frame is pressed. While held it shows the other version for comparison. */
+  readonly holding = signal<'retouch' | 'lightbox' | null>(null);
   readonly formatStamp = formatStamp;
 
   readonly selected = computed<Region | null>(() => {
@@ -125,6 +142,11 @@ export class EditorPage {
     () =>
       (this.jobRunning() && this.activeJob()?.type === 'upload') ||
       !!this.scan()?.regions.some((region) => region.upload_status === 'uploading'),
+  );
+  readonly retouching = computed(
+    () =>
+      (this.jobRunning() && this.activeJob()?.type === 'retouch') ||
+      !!this.scan()?.regions.some((region) => this.retouchingRegion(region)),
   );
 
   private readonly canvas = viewChild<ElementRef<HTMLCanvasElement>>('canvas');
@@ -182,15 +204,72 @@ export class EditorPage {
       next: (settings) => this.immichUrl.set(settings.immich_base_url.replace(/\/+$/, '')),
       error: () => this.immichUrl.set(''),
     });
+    this.api.retouchModels().subscribe({
+      next: (models) => this.retouchModels.set(models),
+      error: () => this.retouchModels.set([]),
+    });
   }
 
   redraw(): void {
     this.draw();
   }
 
-  previewUrl(region: Region): string {
+  originalUrl(region: Region): string {
     const scan = this.scan();
     return scan ? this.api.regionPreviewUrl(scan.id, region.id, previewCacheKey(region)) : '';
+  }
+
+  versionUrl(region: Region, version: PhotoVersion): string {
+    const scan = this.scan();
+    if (!scan) {
+      return '';
+    }
+    if (version === 'retouch') {
+      return this.api.retouchPreviewUrl(scan.id, region.id, region.retouch_version ?? '');
+    }
+    return this.api.regionPreviewUrl(scan.id, region.id, previewCacheKey(region));
+  }
+
+  /** The retouched bitmap is already upright. The crop is turned in the browser. */
+  versionTurns(region: Region, version: PhotoVersion): number {
+    return version === 'retouch' ? 0 : region.quarter_turns % 4;
+  }
+
+  versionAlt(region: Region, version: PhotoVersion): string {
+    if (version === 'crop') {
+      return 'Straightened crop';
+    }
+    return region.retouch_reconstructs_faces ? 'Retouched reconstruction' : 'Retouched crop';
+  }
+
+  /** Versions to stack in a frame. Both load up front so holding swaps without a flash. */
+  frameVersions(region: Region): PhotoVersion[] {
+    return region.retouch_ready ? ['crop', 'retouch'] : ['crop'];
+  }
+
+  /** What the Retouched section shows: the upload choice, or the other one while held. */
+  retouchShown(region: Region): PhotoVersion {
+    return shownVersion(chosenVersion(region), region.retouch_ready, this.holding() === 'retouch');
+  }
+
+  versionLabel(region: Region): string {
+    return uploadVersionLabel(region);
+  }
+
+  versionName(version: PhotoVersion): string {
+    return version === 'retouch' ? 'Retouched' : 'Original';
+  }
+
+  hold(where: 'retouch' | 'lightbox', event: PointerEvent): void {
+    if (event.button !== 0 || (event.target as HTMLElement).closest('button')) {
+      return;
+    }
+    event.preventDefault();
+    this.holding.set(where);
+  }
+
+  release(): void {
+    this.holding.set(null);
   }
 
   frameAspect(region: Region): number {
@@ -246,6 +325,9 @@ export class EditorPage {
     if (!scan || scan.files_deleted || this.busy() || this.uploading()) {
       return false;
     }
+    if (region.upload_source === 'retouch' && !region.retouch_ready) {
+      return false;
+    }
     return this.dirty() || region.needs_upload;
   }
 
@@ -264,9 +346,110 @@ export class EditorPage {
 
   jobMessage(job: ActiveJob): string {
     if (job.status === 'failed') {
-      return job.type === 'detect' ? 'Detection failed.' : 'Some photos could not be uploaded.';
+      if (job.type === 'detect') {
+        return 'Detection failed.';
+      }
+      if (job.type === 'retouch') {
+        return 'Retouch failed.';
+      }
+      return 'Some photos could not be uploaded.';
     }
-    return job.type === 'detect' ? 'Finding photos on the bed…' : 'Uploading to Immich…';
+    if (job.type === 'detect') {
+      return 'Finding photos on the bed…';
+    }
+    if (job.type === 'retouch') {
+      return 'Retouching this photo…';
+    }
+    return 'Uploading to Immich…';
+  }
+
+  retouchingRegion(region: Region): boolean {
+    return region.retouch_status === 'queued' || region.retouch_status === 'running';
+  }
+
+  retouchChosen(region: Region): boolean {
+    return (
+      region.retouch_upscale ||
+      region.retouch_faces ||
+      region.retouch_colorize ||
+      region.retouch_scratches
+    );
+  }
+
+  missingWeights(region: Region): string {
+    const needed = new Set<string>();
+    if (region.retouch_upscale) {
+      needed.add('upscale');
+    }
+    if (region.retouch_faces) {
+      needed.add('faces');
+      needed.add('face-detection');
+    }
+    if (region.retouch_colorize) {
+      needed.add('colorize');
+    }
+    if (region.retouch_scratches) {
+      needed.add('inpaint');
+    }
+    const missing = this.retouchModels().filter((model) => needed.has(model.id) && !model.present);
+    if (!missing.length) {
+      return '';
+    }
+    return missing.map((model) => `${model.filename} (${model.license_id})`).join(', ');
+  }
+
+  chooseVersion(source: 'crop' | 'retouch'): void {
+    const scan = this.scan();
+    const region = this.selected();
+    if (!scan || !region || region.upload_source === source) {
+      return;
+    }
+    if (source === 'retouch' && !region.retouch_ready) {
+      return;
+    }
+    this.run(this.api.patchRegion(scan.id, region.id, { upload_source: source }), (updated) =>
+      this.replaceRegion(updated, true),
+    );
+  }
+
+  setRetouch(
+    flag: 'retouch_upscale' | 'retouch_faces' | 'retouch_colorize' | 'retouch_scratches',
+    checked: boolean,
+  ): void {
+    const scan = this.scan();
+    const region = this.selected();
+    if (!scan || !region || region[flag] === checked) {
+      return;
+    }
+    this.run(this.api.patchRegion(scan.id, region.id, { [flag]: checked }), (updated) =>
+      this.replaceRegion(updated, true),
+    );
+  }
+
+  runRetouch(): void {
+    const scan = this.scan();
+    const region = this.selected();
+    if (!scan || !region || !this.retouchChosen(region)) {
+      this.error.set('Choose upscale, face restoration, color, or scratches for this photo.');
+      return;
+    }
+    if (this.dirty()) {
+      this.error.set('Save the crop first. Retouch uses the saved crop.');
+      return;
+    }
+    this.run(
+      this.api.retouch(scan.id, region.id, {
+        upscale: region.retouch_upscale,
+        faces: region.retouch_faces,
+        colorize: region.retouch_colorize,
+        scratches: region.retouch_scratches,
+      }),
+      (result) => {
+        this.replaceRegion(result.region, true);
+        this.activeJob.set({ id: result.job_id, type: 'retouch', status: 'queued', error: null });
+        this.error.set('');
+      },
+    );
   }
 
   setSectionOpen(section: Section, open: boolean): void {
@@ -589,11 +772,20 @@ export class EditorPage {
     });
   }
 
-  openPreview(): void {
+  openPreview(version = false): void {
+    this.lightboxVersion.set(version);
+    this.holding.set(null);
     this.previewOpen.set(true);
   }
 
+  /** Opened from Preview it starts on the crop, from Retouched on the upload choice. */
+  lightboxShown(region: Region): PhotoVersion {
+    const base = this.lightboxVersion() ? chosenVersion(region) : 'crop';
+    return shownVersion(base, region.retouch_ready, this.holding() === 'lightbox');
+  }
+
   closePreview(): void {
+    this.holding.set(null);
     this.previewOpen.set(false);
   }
 
@@ -763,14 +955,14 @@ export class EditorPage {
     this.selectNow(scan.regions[0]?.id ?? null);
   }
 
-  private replaceRegion(region: Region): void {
+  private replaceRegion(region: Region, keepDraft = false): void {
     this.noteEdit();
     this.scan.update((scan) =>
       scan
         ? { ...scan, regions: scan.regions.map((item) => (item.id === region.id ? region : item)) }
         : scan,
     );
-    if (this.selectedId() === region.id) {
+    if (this.selectedId() === region.id && !(keepDraft && this.dirty())) {
       this.draft.set(draftFrom(region));
       this.dirty.set(false);
     }
@@ -796,14 +988,14 @@ export class EditorPage {
             this.error.set(next.error ?? this.jobMessage({ ...job, status: 'failed' }));
           } else {
             this.activeJob.set(null);
-            this.flash(job.type === 'detect' ? 'Detection finished.' : 'Upload finished.');
+            this.flash(finishedLabel(job.type));
           }
         },
         error: () => undefined,
       });
       return;
     }
-    if (this.detecting() || this.uploading()) {
+    if (this.detecting() || this.uploading() || this.retouching()) {
       this.reload();
     }
   }
@@ -906,12 +1098,25 @@ export class EditorPage {
   }
 }
 
+function finishedLabel(type: ActiveJob['type']): string {
+  if (type === 'detect') {
+    return 'Detection finished.';
+  }
+  if (type === 'retouch') {
+    return 'Retouch finished.';
+  }
+  return 'Upload finished.';
+}
+
 function storedSection(): Section | null {
   const value = localStorage.getItem(SECTION_KEY);
   if (value === 'none') {
     return null;
   }
-  return value === 'details' ? 'details' : 'preview';
+  if (value === 'details' || value === 'retouch') {
+    return value;
+  }
+  return 'preview';
 }
 
 function rectOf(region: Region): Rect {

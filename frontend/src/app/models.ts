@@ -24,6 +24,17 @@ export interface Region {
   uploaded_at: string | null;
   crop_changed: boolean;
   needs_upload: boolean;
+  retouch_upscale: boolean;
+  retouch_faces: boolean;
+  retouch_colorize: boolean;
+  retouch_scratches: boolean;
+  upload_source: 'crop' | 'retouch';
+  retouch_status: string;
+  retouch_error: string | null;
+  retouch_signature: string | null;
+  retouch_ready: boolean;
+  retouch_version: string | null;
+  retouch_reconstructs_faces: boolean;
   updated_at: string;
 }
 
@@ -72,6 +83,10 @@ export interface Settings {
   scan_mode: 'Color' | 'Gray';
   width_mm: number | null;
   height_mm: number | null;
+  retouch_upscale: boolean;
+  retouch_faces: boolean;
+  retouch_colorize: boolean;
+  retouch_scratches: boolean;
 }
 
 export interface ScannerDevice {
@@ -109,6 +124,45 @@ export interface RegionGeometry {
   width: number;
   height: number;
   angle_deg: number;
+}
+
+export interface ModelProgress {
+  received: number;
+  total: number | null;
+  phase: 'downloading' | 'installing';
+}
+
+export interface RetouchModel {
+  id: string;
+  purpose: string;
+  version: string;
+  license_id: string;
+  license_summary: string;
+  source_url: string;
+  filename: string;
+  present: boolean;
+  matches_pin: boolean | null;
+  automatic_download: boolean;
+  can_download: boolean;
+  can_update: boolean;
+  can_redownload: boolean;
+  size_bytes: number | null;
+  progress: ModelProgress | null;
+}
+
+export interface RetouchChoice {
+  upscale: boolean;
+  faces: boolean;
+  colorize: boolean;
+  scratches: boolean;
+}
+
+export interface RetouchPatch {
+  retouch_upscale?: boolean;
+  retouch_faces?: boolean;
+  retouch_colorize?: boolean;
+  retouch_scratches?: boolean;
+  upload_source?: 'crop' | 'retouch';
 }
 
 export interface RegionMetadata {

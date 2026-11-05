@@ -16,10 +16,18 @@ class Settings(BaseSettings):
     port: int = 8000
     worker_enabled: bool = True
     scanner_backend: Literal["sane", "fake"] = "sane"
+    models_dir: Path | None = None
+    retouch_execution: Literal["cpu", "openvino"] = "cpu"
+    retouch_openvino_device: str = "CPU_FP32"
     resolution_dpi: int = Field(default=300, ge=50, le=4800)
     scan_format: Literal["tiff", "png"] = "tiff"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    def resolved_models_dir(self) -> Path:
+        if self.models_dir is not None:
+            return self.models_dir
+        return self.data_dir / "models"
 
     def sqlite_url(self) -> str:
         if self.database_url:

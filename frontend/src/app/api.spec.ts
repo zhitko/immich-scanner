@@ -21,6 +21,10 @@ describe('ArchiveApi', () => {
     scan_mode: 'Color',
     width_mm: null,
     height_mm: null,
+    retouch_upscale: false,
+    retouch_faces: false,
+    retouch_colorize: false,
+    retouch_scratches: false,
   };
 
   beforeEach(() => {
@@ -79,6 +83,36 @@ describe('ArchiveApi', () => {
     const request = http.expectOne('/api/settings/test');
     expect(request.request.body).toEqual(settings);
     request.flush({ ok: true, version: '3.3.5', album_count: 2 });
+  });
+
+  it('queues a retouch for one photo', () => {
+    api
+      .retouch('scan-1', 'region-1', {
+        upscale: true,
+        faces: false,
+        colorize: false,
+        scratches: false,
+      })
+      .subscribe((body) => expect(body.job_id).toBe('job-9'));
+    const request = http.expectOne('/api/scans/scan-1/regions/region-1/retouch');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      upscale: true,
+      faces: false,
+      colorize: false,
+      scratches: false,
+    });
+    request.flush({ job_id: 'job-9', region: {} });
+  });
+
+  it('downloads a model only after the license is accepted', () => {
+    api
+      .fetchRetouchModel('face-detection')
+      .subscribe((model) => expect(model.id).toBe('face-detection'));
+    const request = http.expectOne('/api/retouch/models/face-detection');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ accept: true, force: false });
+    request.flush({ id: 'face-detection' });
   });
 
   it('starts a bed scan', () => {

@@ -221,6 +221,7 @@ __marimo__/
 
 # immich-scanner
 data/
+*.onnx
 node_modules/
 dist/
 .angular/

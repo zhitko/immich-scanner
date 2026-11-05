@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import jobs, scans
+from app.api import jobs, retouch, scans
 from app.api import scanner as scanner_api
 from app.api import settings as settings_api
 from app.config import Settings, get_settings
@@ -15,6 +15,7 @@ from app.detection.opencv_detector import OpenCvPhotoDetector
 from app.immich.client import ImmichClient
 from app.jobs.worker import JobWorker
 from app.migrate import upgrade_database
+from app.retouch.engine import OnnxRetoucher
 from app.runtime import Services
 from app.scanner.factory import build_scanner
 from app.scanning import BedScan
@@ -37,6 +38,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         session_factory=session_factory,
         storage=Storage(process_settings.data_dir),
         detector=OpenCvPhotoDetector(),
+        retoucher=OnnxRetoucher(
+            process_settings.resolved_models_dir(),
+            execution=process_settings.retouch_execution,
+            openvino_device=process_settings.retouch_openvino_device,
+        ),
         build_gateway=lambda url, key: ImmichClient(url, key),
     )
     worker = JobWorker(services)
@@ -56,6 +62,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(scanner_api.router, prefix="/api")
     app.include_router(scans.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
+    app.include_router(retouch.router, prefix="/api")
     app.include_router(settings_api.router, prefix="/api")
 
     @app.get("/api/health")

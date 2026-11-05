@@ -77,6 +77,10 @@ def _archive(body: SettingsUpdate) -> ArchiveSettings:
         scan_mode=body.scan_mode,
         width_mm=body.width_mm,
         height_mm=body.height_mm,
+        retouch_upscale=body.retouch_upscale,
+        retouch_faces=body.retouch_faces,
+        retouch_colorize=body.retouch_colorize,
+        retouch_scratches=body.retouch_scratches,
     )
 
 
@@ -93,4 +97,8 @@ def _out(settings: ArchiveSettings) -> SettingsOut:
         scan_mode=settings.scan_mode,  # type: ignore[arg-type]
         width_mm=settings.width_mm,
         height_mm=settings.height_mm,
+        retouch_upscale=settings.retouch_upscale,
+        retouch_faces=settings.retouch_faces,
+        retouch_colorize=settings.retouch_colorize,
+        retouch_scratches=settings.retouch_scratches,
     )

@@ -9,6 +9,9 @@ import {
   Region,
   RegionGeometry,
   RegionMetadata,
+  RetouchChoice,
+  RetouchModel,
+  RetouchPatch,
   ScanDetail,
   ScanSummary,
   ScannerStatus,
@@ -53,9 +56,28 @@ export class ArchiveApi {
   patchRegion(
     scanId: string,
     regionId: string,
-    body: RegionGeometry | Partial<RegionMetadata>,
+    body: RegionGeometry | Partial<RegionMetadata> | RetouchPatch,
   ): Observable<Region> {
     return this.http.patch<Region>(`/api/scans/${scanId}/regions/${regionId}`, body);
+  }
+
+  retouch(
+    scanId: string,
+    regionId: string,
+    choice: RetouchChoice,
+  ): Observable<{ job_id: string; region: Region }> {
+    return this.http.post<{ job_id: string; region: Region }>(
+      `/api/scans/${scanId}/regions/${regionId}/retouch`,
+      choice,
+    );
+  }
+
+  retouchModels(): Observable<RetouchModel[]> {
+    return this.http.get<RetouchModel[]>('/api/retouch/models');
+  }
+
+  fetchRetouchModel(id: string, force = false): Observable<RetouchModel> {
+    return this.http.post<RetouchModel>(`/api/retouch/models/${id}`, { accept: true, force });
   }
 
   rotateRegion(scanId: string, regionId: string, clockwise = true): Observable<Region> {
@@ -110,6 +132,10 @@ export class ArchiveApi {
 
   regionPreviewUrl(scanId: string, regionId: string, version: string): string {
     return `/api/scans/${scanId}/regions/${regionId}/preview?v=${encodeURIComponent(version)}`;
+  }
+
+  retouchPreviewUrl(scanId: string, regionId: string, version: string): string {
+    return `/api/scans/${scanId}/regions/${regionId}/retouch-preview?v=${encodeURIComponent(version)}`;
   }
 }
 

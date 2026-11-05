@@ -9,13 +9,14 @@ from sqlalchemy.orm import Session
 from app.clock import utcnow
 from app.detection.base import DetectedRegion
 from app.detection.opencv_detector import overlap_fraction
-from app.imaging.crop import apply_quarter_turns, crop_rotated_rect, crop_signature
+from app.imaging.crop import upright_crop
 from app.imaging.exif_data import build_exif, format_immich_datetime
 from app.imaging.io import load_rgb, save_rgb
 from app.immich.gateway import AssetMetadata, ImmichError, PhotoUpload
 from app.models import Region, Scan
+from app.retouch.options import content_signature, retouch_is_current
 from app.runtime import Services
-from app.settings_store import load_settings
+from app.settings_store import load_settings, retouch_columns
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ def handle_upload(session: Session, job, services: Services) -> None:
 
 
 def needs_upload(region: Region) -> bool:
-    signature = _signature(region)
+    signature = content_signature(region)
     if region.upload_status in {"pending", "failed", "uploading"}:
         return True
     if region.uploaded_crop_signature and region.uploaded_crop_signature != signature:
@@ -129,7 +130,8 @@ def _replace_open_regions(session: Session, scan: Scan, detected) -> None:
     ]
     fresh = [item for item in detected if all(overlap_fraction(item, old) < 0.5 for old in kept)]
     start = max((region.position for region in remaining), default=0)
-    default_album = load_settings(session).default_album_id or None
+    stored = load_settings(session)
+    default_album = stored.default_album_id or None
     now = utcnow()
     for offset, item in enumerate(fresh, start=1):
         session.add(
@@ -161,6 +163,7 @@ def _replace_open_regions(session: Session, scan: Scan, detected) -> None:
                 uploaded_at=None,
                 created_at=now,
                 updated_at=now,
+                **retouch_columns(stored),
             )
         )
 
@@ -170,18 +173,10 @@ def _upload_region(session, services, gateway, scan, region, image, stored) -> N
     region.upload_error = None
     region.updated_at = utcnow()
     session.commit()
-    signature = _signature(region)
+    signature = content_signature(region)
     content_changed = region.immich_asset_id is None or region.uploaded_crop_signature != signature
     if content_changed:
-        cropped = crop_rotated_rect(
-            image,
-            region.center_x,
-            region.center_y,
-            region.width,
-            region.height,
-            region.angle_deg,
-        )
-        cropped = apply_quarter_turns(cropped, region.quarter_turns)
+        cropped, output_dpi = _pixels_for_upload(services, scan, region, image)
         taken = region.taken_at if isinstance(region.taken_at, datetime) else None
         exif = build_exif(
             taken_at=taken,
@@ -199,7 +194,7 @@ def _upload_region(session, services, gateway, scan, region, image, stored) -> N
             stored.output_format,
             jpeg_quality=stored.jpeg_quality,
             exif=exif,
-            dpi=scan.dpi,
+            dpi=output_dpi,
         )
         content = target.read_bytes()
         stamp = format_immich_datetime(taken or datetime.now(UTC))
@@ -247,15 +242,37 @@ def _upload_region(session, services, gateway, scan, region, image, stored) -> N
     region.updated_at = utcnow()
 
 
-def _signature(region: Region) -> str:
-    return crop_signature(
-        region.center_x,
-        region.center_y,
-        region.width,
-        region.height,
-        region.angle_deg,
-        region.quarter_turns,
-    )
+def _pixels_for_upload(services, scan: Scan, region: Region, image):
+    if region.upload_source != "retouch":
+        cropped = upright_crop(
+            image,
+            region.center_x,
+            region.center_y,
+            region.width,
+            region.height,
+            region.angle_deg,
+            region.quarter_turns,
+        )
+        return cropped, scan.dpi
+    if not retouch_is_current(region) or not region.retouch_path:
+        raise RuntimeError(
+            "The retouched version is not ready for this crop. "
+            "Run retouch again, or upload the original."
+        )
+    derivative, _dpi = load_rgb(services.storage.absolute(region.retouch_path))
+    return derivative, _scaled_dpi(scan, region, derivative)
+
+
+def _scaled_dpi(scan: Scan, region: Region, derivative) -> int | None:
+    """A current derivative was made from this geometry, so its crop width is known."""
+
+    if not scan.dpi:
+        return scan.dpi
+    crop_w = max(1, int(round(region.width)))
+    crop_h = max(1, int(round(region.height)))
+    upright_w = crop_h if region.quarter_turns % 2 else crop_w
+    scale = derivative.shape[1] / upright_w
+    return max(1, int(round(scan.dpi * scale)))
 
 
 def _new_id() -> str:

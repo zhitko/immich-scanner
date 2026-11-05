@@ -37,7 +37,16 @@ export class JobsPage {
   }
 
   typeLabel(type: string): string {
-    return type === 'detect' ? 'Find photos' : type === 'upload' ? 'Upload' : type;
+    if (type === 'detect') {
+      return 'Find photos';
+    }
+    if (type === 'upload') {
+      return 'Upload';
+    }
+    if (type === 'retouch') {
+      return 'Retouch';
+    }
+    return type;
   }
 
   duration(job: Job): string {
