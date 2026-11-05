@@ -74,6 +74,7 @@ interface ActiveJob {
   type: 'detect' | 'upload' | 'retouch';
   status: string;
   error: string | null;
+  regionId?: string;
 }
 
 type Section = 'preview' | 'retouch' | 'details';
@@ -364,9 +365,45 @@ export class EditorPage {
       return 'Finding photos on the bed…';
     }
     if (job.type === 'retouch') {
-      return 'Retouching this photo…';
+      if (job.status === 'queued') {
+        return 'Waiting to retouch this photo…';
+      }
+      const percent = this.retouchPercent();
+      if (percent === null) {
+        return 'Retouching this photo…';
+      }
+      return `Retouching this photo… ${percent}%`;
     }
     return 'Uploading to Immich…';
+  }
+
+  retouchPercent(): number | null {
+    const regionId = this.activeJob()?.regionId;
+    if (!regionId) {
+      return null;
+    }
+    const region = this.scan()?.regions.find((candidate) => candidate.id === regionId);
+    return region?.retouch_status === 'running' ? region.retouch_progress : null;
+  }
+
+  retouchBanner(region: Region): string {
+    if (region.retouch_status === 'queued') {
+      return 'Waiting to retouch this photo…';
+    }
+    if (region.retouch_progress === null) {
+      return 'Retouching this photo…';
+    }
+    return `Retouching this photo… ${region.retouch_progress}%`;
+  }
+
+  retouchButton(region: Region): string {
+    if (region.retouch_status === 'queued') {
+      return 'Waiting…';
+    }
+    if (region.retouch_progress === null) {
+      return 'Retouching…';
+    }
+    return `Retouching… ${region.retouch_progress}%`;
   }
 
   retouchingRegion(region: Region): boolean {
@@ -452,7 +489,13 @@ export class EditorPage {
       }),
       (result) => {
         this.replaceRegion(result.region, true);
-        this.activeJob.set({ id: result.job_id, type: 'retouch', status: 'queued', error: null });
+        this.activeJob.set({
+          id: result.job_id,
+          type: 'retouch',
+          status: 'queued',
+          error: null,
+          regionId: result.region.id,
+        });
         this.error.set('');
       },
     );

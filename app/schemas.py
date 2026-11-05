@@ -39,6 +39,7 @@ class RegionOut(BaseModel):
     retouch_scratches: bool
     upload_source: Literal["crop", "retouch"]
     retouch_status: str
+    retouch_progress: int | None = None
     retouch_error: str | None
     retouch_signature: str | None
     retouch_ready: bool

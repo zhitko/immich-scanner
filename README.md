@@ -99,8 +99,8 @@ Retouch runs on the same single worker as detection and upload, so a slow retouc
 
 The stages that are switched on run in this order:
 
-- Fill scratches with LaMa. The mask is thin light or dark strokes, so a filled area is left alone. LaMa runs at full resolution on the 512×512 tiles that hold a scratch.
-- Colorize with DDColor. Lightness stays from the scan.
+- Fill scratches with LaMa. The mask follows a light or dark stroke, including a crease that fades along its length, and leaves a filled area alone. LaMa runs at full resolution on the 512×512 tiles that hold a scratch.
+- Colorize with DDColor. Lightness stays from the scan. A high-key or flat scan is given a fixed tone curve on the model input only; without that, this export stays gray and a few of its pixels resize into colored dots.
 - Upscale and denoise with the small Real-ESRGAN model (`realesr-general-x4v3`), in tiles.
 - Restore faces with GFPGAN. This invents detail. It stays off unless chosen for that photo, and the preview says it is a reconstruction.
 

@@ -30,6 +30,7 @@ export interface Region {
   retouch_scratches: boolean;
   upload_source: 'crop' | 'retouch';
   retouch_status: string;
+  retouch_progress: number | null;
   retouch_error: string | null;
   retouch_signature: string | null;
   retouch_ready: boolean;

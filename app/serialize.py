@@ -11,6 +11,7 @@ from app.retouch.options import (
     retouch_is_current,
     stored_geometry,
 )
+from app.retouch.progress import retouch_progress
 from app.schemas import RegionOut, ScanDetail, ScanSummary
 
 
@@ -24,6 +25,7 @@ def region_out(region: Region) -> RegionOut:
     stored = stored_geometry(region.uploaded_crop_signature)
     changed = bool(stored) and stored != geometry_signature(region)
     ready = retouch_is_current(region)
+    status = region.retouch_status or "none"
     return RegionOut(
         id=region.id,
         position=region.position,
@@ -55,7 +57,8 @@ def region_out(region: Region) -> RegionOut:
         retouch_colorize=bool(region.retouch_colorize),
         retouch_scratches=bool(region.retouch_scratches),
         upload_source=region.upload_source or "crop",
-        retouch_status=region.retouch_status or "none",
+        retouch_status=status,
+        retouch_progress=retouch_progress(region.id) if status == "running" else None,
         retouch_error=region.retouch_error,
         retouch_signature=region.retouch_signature,
         retouch_ready=ready,

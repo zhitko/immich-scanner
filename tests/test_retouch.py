@@ -13,7 +13,7 @@ from app.imaging.crop import upright_crop
 from app.imaging.io import load_rgb
 from app.models import Job, Region
 from app.retouch.catalog import CATALOG, ExtraFile
-from app.retouch.engine import MissingWeights, OnnxRetoucher, _run_upscale_tile
+from app.retouch.engine import MissingWeights, OnnxRetoucher, _Budget, _run_upscale_tile
 from app.retouch.fetch import (
     FetchError,
     _hash,
@@ -27,12 +27,18 @@ from app.retouch.fetch import (
 from app.retouch.imageops import (
     FACE_TEMPLATE,
     apply_ab,
+    chroma_collapsed,
+    colorizer_tone,
+    masked_tile_count,
     masked_tiles,
     paste_face,
+    square_tile_count,
+    tame_ab,
     tiled_map,
     warp_face,
 )
 from app.retouch.options import RetouchOptions
+from app.retouch.progress import clear_retouch_progress, retouch_progress, set_retouch_progress
 from app.retouch.scratch import scratch_mask
 from app.retouch.session import execution_providers
 from tests.synthetic import encode_png, make_bed
@@ -42,7 +48,7 @@ _YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa
 
 
 class MarkRetoucher:
-    def apply(self, image: np.ndarray, options: RetouchOptions) -> np.ndarray:
+    def apply(self, image: np.ndarray, options: RetouchOptions, on_progress=None) -> np.ndarray:
         out = np.array(image, copy=True)
         out[:12, :12] = (255, 0, 0)
         if options.faces:
@@ -142,6 +148,93 @@ def test_upscale_output_overshoot_is_clipped_not_rescaled() -> None:
     assert result[5, 5, 0] == 128
 
 
+def test_tile_progress_counts_every_inference() -> None:
+    image = np.zeros((20, 24, 3), dtype=np.uint8)
+    calls = 0
+    steps = 0
+
+    def run(tile: np.ndarray) -> np.ndarray:
+        nonlocal calls
+        calls += 1
+        return np.repeat(np.repeat(tile, 2, axis=0), 2, axis=1)
+
+    def count() -> None:
+        nonlocal steps
+        steps += 1
+
+    tiled_map(image, run, tile=8, overlap=1, on_tile=count)
+    assert steps == calls == square_tile_count(20, 24, 8, 1)
+    assert steps > 1
+
+    mask = np.zeros((700, 1400), dtype=bool)
+    mask[:, 300] = True
+    filled_steps = [0]
+    masked_tiles(
+        np.zeros((700, 1400, 3), dtype=np.uint8),
+        mask,
+        lambda tile, _mask: tile,
+        tile_h=512,
+        tile_w=512,
+        overlap=64,
+        on_tile=lambda: filled_steps.__setitem__(0, filled_steps[0] + 1),
+    )
+    assert filled_steps[0] == masked_tile_count(mask, 512, 512, 64)
+    assert filled_steps[0] > 0
+
+
+def test_retouch_progress_is_stored_clamped_and_cleared() -> None:
+    region_id = "progress-region"
+    clear_retouch_progress(region_id)
+    try:
+        assert retouch_progress(region_id) is None
+        set_retouch_progress(region_id, 40)
+        assert retouch_progress(region_id) == 40
+        set_retouch_progress(region_id, 140)
+        assert retouch_progress(region_id) == 100
+        clear_retouch_progress(region_id)
+        assert retouch_progress(region_id) is None
+        set_retouch_progress(region_id, 0)
+        assert retouch_progress(region_id) == 0
+    finally:
+        clear_retouch_progress(region_id)
+
+
+def test_budget_holds_its_percent_when_more_faces_turn_up() -> None:
+    seen: list[int] = []
+    budget = _Budget(10, 1, seen.append)
+    budget.add(6)
+    budget.note_faces(4)
+    budget.add(1)
+    budget.finish()
+    assert seen == sorted(seen)
+    assert len(seen) == len(set(seen))
+    assert seen[-1] == 99
+
+
+def test_upscale_reports_a_rising_percent(tmp_path, monkeypatch) -> None:
+    (tmp_path / CATALOG["upscale"].filename).write_bytes(b"onnx")
+
+    class Input:
+        name = "input"
+        shape = [1, 3, 8, 8]
+
+    class Upscaler:
+        def get_inputs(self):
+            return [Input()]
+
+        def run(self, _outputs, feeds):
+            return [np.repeat(np.repeat(feeds["input"], 2, axis=2), 2, axis=3)]
+
+    monkeypatch.setattr("app.retouch.engine.open_session", lambda *_args: Upscaler())
+    seen: list[int] = []
+    image = np.full((20, 24, 3), 40, dtype=np.uint8)
+    OnnxRetoucher(tmp_path).apply(image, RetouchOptions(upscale=True), on_progress=seen.append)
+    assert seen[0] > 0
+    assert seen[-1] == 99
+    assert seen == sorted(seen)
+    assert len(seen) == square_tile_count(20, 24, 8, 1)
+
+
 def test_a_changed_model_file_opens_a_new_session(tmp_path, monkeypatch) -> None:
     opened: list[str] = []
     monkeypatch.setattr(
@@ -215,6 +308,70 @@ def test_neutral_chroma_stays_gray_and_a_shift_changes_it() -> None:
     assert int(warm[8, 8, 0]) > int(warm[8, 8, 2]) + 30
 
 
+def test_a_collapsed_colorizer_spike_does_not_bleed() -> None:
+    ab = np.zeros((32, 32, 2), dtype=np.float32)
+    ab[4:8, 2:6] = (420.0, -390.0)
+    assert chroma_collapsed(ab)
+    gray = np.full((64, 80, 3), 140, dtype=np.uint8)
+    painted = apply_ab(gray, tame_ab(ab))
+    assert np.max(np.abs(painted.astype(np.int16) - 140)) <= 1
+    healthy = np.full((16, 16, 2), 30.0, dtype=np.float32)
+    assert not chroma_collapsed(healthy)
+    assert np.allclose(tame_ab(healthy), 30.0)
+
+
+def test_colorizer_tone_pulls_a_high_key_scan_down_and_keeps_order() -> None:
+    image = np.full((40, 40, 3), 210, dtype=np.uint8)
+    image[10:30, 10:30] = 120
+    toned = colorizer_tone(image)
+    assert abs(int(np.median(toned[:, :, 0])) - 92) <= 2
+    assert int(toned[20, 20, 0]) < int(toned[0, 0, 0])
+
+
+def test_a_collapsed_colorizer_is_run_again_on_a_toned_input(tmp_path) -> None:
+    class Input:
+        name = "image"
+        shape = [1, 3, 256, 256]
+
+    class Colorizer:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.means: list[float] = []
+
+        def get_inputs(self):
+            return [Input()]
+
+        def run(self, _outputs, feeds):
+            self.calls += 1
+            self.means.append(float(feeds["image"].mean()))
+            if self.calls == 1:
+                blown = np.zeros((1, 2, 256, 256), dtype=np.float32)
+                blown[0, :, 0:8, 0:8] = 400
+                return [blown]
+            ab = np.full((1, 2, 256, 256), 25.0, dtype=np.float32)
+            return [ab]
+
+    model = Colorizer()
+    retoucher = OnnxRetoucher(tmp_path)
+    retoucher._session = lambda _spec: model  # type: ignore[method-assign]
+    gray = np.full((48, 48, 3), 200, dtype=np.uint8)
+    colored = retoucher._colorize(gray)
+    assert model.calls == 2
+    assert model.means[1] < model.means[0]
+    assert int(colored[24, 24, 0]) > int(colored[24, 24, 2]) + 20
+
+    healthy = Colorizer()
+
+    def ready(_outputs, feeds):
+        healthy.calls += 1
+        return [np.full((1, 2, 256, 256), 20.0, dtype=np.float32)]
+
+    healthy.run = ready  # type: ignore[method-assign]
+    retoucher._session = lambda _spec: healthy  # type: ignore[method-assign]
+    retoucher._colorize(gray)
+    assert healthy.calls == 1
+
+
 def test_scratch_mask_keeps_thin_strokes_and_ignores_a_filled_area() -> None:
     image = np.full((180, 180, 3), 120, dtype=np.uint8)
     image[:, 40:41] = 255
@@ -222,7 +379,91 @@ def test_scratch_mask_keeps_thin_strokes_and_ignores_a_filled_area() -> None:
     mask = scratch_mask(image)
     assert mask[:, 40].any()
     assert not mask[90, 90]
+    assert mask[70:110, 70:110].mean() < 0.15
     assert not scratch_mask(np.full_like(image, 30)).any()
+
+
+def test_scratch_mask_keeps_a_wavy_crease_and_a_fade_between_strong_ends() -> None:
+    image = np.full((220, 520, 3), 80, dtype=np.uint8)
+    for x in range(520):
+        y = int(70 + 10 * np.sin(x / 28))
+        image[y - 1 : y + 2, x] = 220
+    mask = scratch_mask(image)
+    assert mask[70, 260]
+    assert int(mask[40:110].sum()) > 400
+
+    faded = np.full((200, 480, 3), 80, dtype=np.uint8)
+    faded[96:101, 20:200] = 210
+    faded[94:106, 200:236] = 98
+    faded[96:101, 236:460] = 210
+    faded[20:70, 20:70] = 240
+    joined = scratch_mask(faded)
+    assert joined[98, 80]
+    assert joined[98, 400]
+    assert joined[100, 218]
+    assert not joined[45, 45]
+
+
+def test_scratch_mask_bridges_a_fade_in_a_vertical_crease() -> None:
+    faded = np.full((480, 200, 3), 80, dtype=np.uint8)
+    faded[20:200, 96:101] = 210
+    faded[200:236, 94:106] = 98
+    faded[236:460, 96:101] = 210
+    faded[20:70, 20:70] = 240
+    joined = scratch_mask(faded)
+    assert joined[80, 98]
+    assert joined[400, 98]
+    assert joined[218, 100]
+    assert not joined[45, 45]
+
+
+def test_scratch_mask_does_not_join_parallel_vertical_scratches_sideways() -> None:
+    image = np.full((240, 240, 3), 80, dtype=np.uint8)
+    image[20:220, 99:101] = 210
+    image[20:220, 139:141] = 210
+    image[119:121, 101:139] = 100
+    mask = scratch_mask(image)
+    assert mask[120, 100]
+    assert mask[120, 140]
+    assert not mask[120, 120]
+
+
+def test_scratch_mask_leaves_a_blob_beside_a_tear() -> None:
+    image = np.full((180, 240, 3), 70, dtype=np.uint8)
+    image[78:98, 20:220] = 108
+    image[86:90, 20:220] = 190
+    image[100:118, 110:128] = 15
+    mask = scratch_mask(image)
+    assert mask[88, 120]
+    assert mask[96, 120]
+    assert mask[100:118, 110:128].mean() < 0.05
+
+
+def test_scratch_mask_follows_a_diagonal_tear_past_a_break() -> None:
+    image = np.full((180, 180, 3), 70, dtype=np.uint8)
+    for step in range(55):
+        y, x = 20 + step, 130 - step
+        image[y : y + 2, x : x + 2] = 210
+    for step in range(14):
+        y, x = 88 + step, 62 - step
+        image[y : y + 4, x : x + 3] = 200
+    mask = scratch_mask(image)
+    assert mask[22, 128]
+    assert mask[94, 56]
+    assert not mask[10, 10]
+
+
+def test_scratch_mask_covers_the_shoulder_of_a_wide_tear() -> None:
+    image = np.full((180, 240, 3), 70, dtype=np.uint8)
+    image[78:98, 20:220] = 108
+    image[86:90, 20:220] = 190
+    image[20:55, 20:55] = 230
+    mask = scratch_mask(image)
+    assert mask[88, 120]
+    assert mask[80, 120]
+    assert mask[96, 120]
+    assert not mask[40, 40]
+    assert not mask[10, 10]
 
 
 def test_identity_face_alignment_changes_only_the_interior() -> None:
@@ -551,6 +792,7 @@ def test_retouch_keeps_the_crop_and_upload_uses_it_only_when_chosen(client, app_
     assert first["retouch_faces"] is False
     assert first["upload_source"] == "crop"
     assert first["retouch_ready"] is False
+    assert first["retouch_progress"] is None
     refused = client.patch(
         f"/api/scans/{scan_id}/regions/{first['id']}",
         json={"upload_source": "retouch"},

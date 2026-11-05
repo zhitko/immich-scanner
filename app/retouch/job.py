@@ -16,6 +16,7 @@ from app.retouch.options import (
     option_token,
     options_from_region,
 )
+from app.retouch.progress import clear_retouch_progress, set_retouch_progress
 from app.runtime import Services
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,8 @@ def handle_retouch(session: Session, job: Job, services: Services) -> None:
     original_path = scan.original_path
     previous_path = region.retouch_path
     scan_id = scan.id
+    clear_retouch_progress(region_id)
+    set_retouch_progress(region_id, 0)
     region.retouch_status = "running"
     region.retouch_error = None
     region.updated_at = utcnow()
@@ -65,12 +68,19 @@ def handle_retouch(session: Session, job: Job, services: Services) -> None:
         )
         del image
         _save_png(upright, services.storage.absolute(crop_relative))
-        derivative = services.retoucher.apply(upright, options)
+        derivative = services.retoucher.apply(
+            upright,
+            options,
+            on_progress=lambda percent: set_retouch_progress(region_id, percent),
+        )
         del upright
+        # The large PNG and its preview are still ahead. Hold the bar at 99 until they land.
+        set_retouch_progress(region_id, 99)
         _save_png(derivative, retouch_file)
         write_retouch_preview(derivative, preview_file)
         del derivative
     except Exception as exc:
+        clear_retouch_progress(region_id)
         retouch_file.unlink(missing_ok=True)
         preview_file.unlink(missing_ok=True)
         session.rollback()
@@ -85,26 +95,29 @@ def handle_retouch(session: Session, job: Job, services: Services) -> None:
             session.commit()
         raise
 
-    current = session.get(Region, region_id)
-    if current is None:
-        retouch_file.unlink(missing_ok=True)
-        drop_previews(services, scan_id, region_id)
-        services.storage.absolute(crop_relative).unlink(missing_ok=True)
-        return
-    current.crop_path = crop_relative
-    current.retouch_path = retouch_relative
-    current.retouch_signature = produced
-    current.retouch_error = None
-    current.updated_at = utcnow()
-    if _another_retouch_is_queued(session, region_id, job.id):
-        current.retouch_status = "queued"
-    elif expected_retouch_signature(current) == produced:
-        current.retouch_status = "ready"
-    else:
-        current.retouch_status = "stale"
-        if current.upload_source == "retouch":
-            current.upload_source = "crop"
-    session.commit()
+    try:
+        current = session.get(Region, region_id)
+        if current is None:
+            retouch_file.unlink(missing_ok=True)
+            drop_previews(services, scan_id, region_id)
+            services.storage.absolute(crop_relative).unlink(missing_ok=True)
+            return
+        current.crop_path = crop_relative
+        current.retouch_path = retouch_relative
+        current.retouch_signature = produced
+        current.retouch_error = None
+        current.updated_at = utcnow()
+        if _another_retouch_is_queued(session, region_id, job.id):
+            current.retouch_status = "queued"
+        elif expected_retouch_signature(current) == produced:
+            current.retouch_status = "ready"
+        else:
+            current.retouch_status = "stale"
+            if current.upload_source == "retouch":
+                current.upload_source = "crop"
+        session.commit()
+    finally:
+        clear_retouch_progress(region_id)
     if previous_path and previous_path != retouch_relative:
         services.storage.absolute(previous_path).unlink(missing_ok=True)
     drop_previews(services, scan_id, region_id, folders=("retouch-previews",), keep=preview_file)
@@ -117,6 +130,7 @@ def abandon_retouch(session: Session, job: Job, reason: str) -> None:
     region = session.get(Region, job.region_id) if job.region_id else None
     if region is None or region.retouch_status not in {"queued", "running"}:
         return
+    clear_retouch_progress(region.id)
     if _another_retouch_is_queued(session, region.id, job.id):
         region.retouch_status = "queued"
         return

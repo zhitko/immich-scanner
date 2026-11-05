@@ -411,6 +411,12 @@ code {
   --tone: var(--info);
   background: var(--info-soft);
 }
+.banner.progress {
+  flex-wrap: wrap;
+}
+.banner.progress > .meter {
+  flex: 1 0 100%;
+}
 .banner.dismissable {
   justify-content: space-between;
 }

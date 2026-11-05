@@ -67,8 +67,24 @@
     }
     @if (activeJob(); as job) {
       @if (jobRunning()) {
-        <p class="banner busy">
+        <p
+          class="banner busy"
+          [class.progress]="job.type === 'retouch' && retouchPercent() !== null"
+        >
           <span class="spinner" aria-hidden="true"></span>{{ jobMessage(job) }}
+          @if (job.type === 'retouch' && retouchPercent() !== null) {
+            <span
+              class="meter"
+              role="progressbar"
+              aria-label="Retouch progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-valuenow]="retouchPercent()"
+              [attr.aria-valuetext]="retouchPercent() + '%'"
+            >
+              <span [style.width.%]="retouchPercent()"></span>
+            </span>
+          }
         </p>
       }
     }
@@ -324,8 +340,21 @@
                   </p>
                 }
                 @if (retouchingRegion(region)) {
-                  <p class="banner busy">
-                    <span class="spinner" aria-hidden="true"></span>Retouching this photo…
+                  <p class="banner busy" [class.progress]="region.retouch_progress !== null">
+                    <span class="spinner" aria-hidden="true"></span>{{ retouchBanner(region) }}
+                    @if (region.retouch_progress !== null) {
+                      <span
+                        class="meter"
+                        role="progressbar"
+                        aria-label="Retouch progress"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        [attr.aria-valuenow]="region.retouch_progress"
+                        [attr.aria-valuetext]="region.retouch_progress + '%'"
+                      >
+                        <span [style.width.%]="region.retouch_progress"></span>
+                      </span>
+                    }
                   </p>
                 }
                 @if (region.retouch_status === 'failed' && region.retouch_error) {
@@ -386,7 +415,7 @@
                     [title]="dirty() ? 'Save the crop first. Retouch uses the saved crop.' : ''"
                   >
                     @if (retouchingRegion(region)) {
-                      <span class="spinner" aria-hidden="true"></span>Retouching…
+                      <span class="spinner" aria-hidden="true"></span>{{ retouchButton(region) }}
                     } @else {
                       Retouch this photo
                     }

@@ -23,6 +23,7 @@ def tiled_map(
     *,
     tile: int,
     overlap: int,
+    on_tile: Callable[[], None] | None = None,
 ) -> np.ndarray:
     """Run `run` on tiles and stitch. `run` returns the same scale for every tile.
 
@@ -31,12 +32,9 @@ def tiled_map(
 
     if tile < 1:
         raise ValueError("tile must be positive")
-    overlap = min(overlap, max(0, tile // 2))
     height, width = image.shape[:2]
-    working = _pad(image, max(height, tile), max(width, tile))
-    work_h, work_w = working.shape[:2]
-    starts_y = _starts(work_h, tile, overlap)
-    starts_x = _starts(work_w, tile, overlap)
+    work_h, work_w, overlap, starts_y, starts_x = _grid(height, width, tile, tile, overlap)
+    working = _pad(image, work_h, work_w)
     sample = run(working[:tile, :tile])
     scale_y, scale_x = _scale((tile, tile), sample.shape)
     if scale_y != scale_x:
@@ -56,6 +54,8 @@ def tiled_map(
             weights[:rows] += carried[1]
         for x in starts_x:
             output = sample if row == 0 and x == 0 else run(working[y : y + tile, x : x + tile])
+            if on_tile is not None:
+                on_tile()
             if output.shape[0] != size or output.shape[1] != size:
                 raise RuntimeError("upscaler tiles disagree on scale")
             origin_x = x * scale
@@ -68,6 +68,13 @@ def tiled_map(
     return stitched[: height * scale, : width * scale]
 
 
+def square_tile_count(height: int, width: int, tile: int, overlap: int) -> int:
+    """How many tiles `tiled_map` will run, including the first sample tile."""
+
+    _work_h, _work_w, _overlap, starts_y, starts_x = _grid(height, width, tile, tile, overlap)
+    return len(starts_y) * len(starts_x)
+
+
 def masked_tiles(
     image: np.ndarray,
     mask: np.ndarray,
@@ -76,6 +83,7 @@ def masked_tiles(
     tile_h: int,
     tile_w: int,
     overlap: int,
+    on_tile: Callable[[], None] | None = None,
 ) -> np.ndarray:
     """Run `run(tile, tile_mask)` at full resolution on each tile that holds a masked pixel.
 
@@ -83,14 +91,12 @@ def masked_tiles(
     """
 
     height, width = image.shape[:2]
-    work_h, work_w = max(height, tile_h), max(width, tile_w)
+    work_h, work_w, _overlap, starts_y, starts_x = _grid(height, width, tile_h, tile_w, overlap)
     working = _pad(image, work_h, work_w)
-    holes = np.zeros((work_h, work_w), dtype=np.uint8)
-    holes[:height, :width] = mask.astype(bool)
+    holes = _holes(mask, work_h, work_w)
     result = working.copy()
-    overlap = min(overlap, tile_h // 2, tile_w // 2)
-    for y in _starts(work_h, tile_h, overlap):
-        for x in _starts(work_w, tile_w, overlap):
+    for y in starts_y:
+        for x in starts_x:
             tile_mask = holes[y : y + tile_h, x : x + tile_w]
             if not tile_mask.any():
                 continue
@@ -100,7 +106,31 @@ def masked_tiles(
             target = result[y : y + tile_h, x : x + tile_w]
             hole = tile_mask.astype(bool)
             target[hole] = output[hole]
+            if on_tile is not None:
+                on_tile()
     return result[:height, :width]
+
+
+def masked_tile_count(mask: np.ndarray, tile_h: int, tile_w: int, overlap: int) -> int:
+    """How many tiles `masked_tiles` will run. Empty holes are skipped."""
+
+    height, width = mask.shape[:2]
+    work_h, work_w, _overlap, starts_y, starts_x = _grid(height, width, tile_h, tile_w, overlap)
+    holes = _holes(mask, work_h, work_w)
+    return sum(1 for y in starts_y for x in starts_x if holes[y : y + tile_h, x : x + tile_w].any())
+
+
+# OpenCV float Lab keeps a and b near -128..127. This export's real predictions stay
+# inside about ±110. Anything past that is not a color, and cubic resize turns it into dots.
+_AB_LIMIT = 110.0
+# A collapsed DDColor map sits near 0 except for a blown patch. A real one does not.
+_COLLAPSED_MEDIAN = 2.0
+# Gray levels at percentiles 0, 5, 25, 50, 75, 95, and 100. They follow a print this
+# export actually colors: a dark mass and open highlights. A high-key or flat scan
+# mapped onto that shape produces chroma. Left alone, the same scan comes back gray
+# with a few pixels in the hundreds.
+_TONE_PERCENTILES = (0, 5, 25, 50, 75, 95, 100)
+_TONE_LEVELS = (40, 43, 48, 92, 122, 186, 210)
 
 
 def apply_ab(image: np.ndarray, ab: np.ndarray) -> np.ndarray:
@@ -108,11 +138,51 @@ def apply_ab(image: np.ndarray, ab: np.ndarray) -> np.ndarray:
 
     rgb = image.astype(np.float32) / 255.0
     lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
-    chroma = ab.astype(np.float32)
+    chroma = _clip_ab(ab)
     if chroma.shape[:2] != image.shape[:2]:
-        chroma = cv2.resize(chroma, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_CUBIC)
+        # Cubic overshoots near a sharp edge. Clipping again keeps it inside the limit.
+        chroma = _clip_ab(
+            cv2.resize(chroma, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_CUBIC)
+        )
     lab[..., 1:3] = chroma
     return unit_to_rgb(cv2.cvtColor(lab, cv2.COLOR_LAB2RGB))
+
+
+def chroma_collapsed(ab: np.ndarray) -> bool:
+    """True when a colorizer result is gray, whatever a few extreme pixels are doing."""
+
+    return float(np.median(_ab_magnitude(_clip_ab(ab)))) < _COLLAPSED_MEDIAN
+
+
+def tame_ab(ab: np.ndarray) -> np.ndarray:
+    """Drop the blown patch on a collapsed map. A real prediction is left in place."""
+
+    chroma = _clip_ab(ab)
+    if not chroma_collapsed(chroma):
+        return chroma
+    chroma[_ab_magnitude(chroma) > 8.0] = 0
+    return chroma
+
+
+def _clip_ab(ab: np.ndarray) -> np.ndarray:
+    return np.clip(ab.astype(np.float32), -_AB_LIMIT, _AB_LIMIT)
+
+
+def _ab_magnitude(ab: np.ndarray) -> np.ndarray:
+    return np.linalg.norm(ab, axis=2)
+
+
+def colorizer_tone(image: np.ndarray) -> np.ndarray:
+    """Remap gray levels for the colorizer input. The result is still a gray RGB image."""
+
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    src = [float(np.percentile(gray, percentile)) for percentile in _TONE_PERCENTILES]
+    for index in range(1, len(src)):
+        if src[index] <= src[index - 1]:
+            src[index] = src[index - 1] + 1e-3
+    lut = np.interp(np.arange(256), src, _TONE_LEVELS)
+    mapped = np.clip(lut, 0, 255).astype(np.uint8)[gray]
+    return np.repeat(mapped[:, :, None], 3, axis=2)
 
 
 def lab_gray_rgb(image: np.ndarray, width: int, height: int) -> np.ndarray:
@@ -196,6 +266,33 @@ def _pad(image: np.ndarray, height: int, width: int) -> np.ndarray:
     if pad_y == 0 and pad_x == 0:
         return image
     return cv2.copyMakeBorder(image, 0, pad_y, 0, pad_x, cv2.BORDER_REFLECT)
+
+
+def _grid(
+    height: int,
+    width: int,
+    tile_h: int,
+    tile_w: int,
+    overlap: int,
+) -> tuple[int, int, int, list[int], list[int]]:
+    """Padded size, clamped overlap, and tile origins. The runners and counters share it."""
+
+    work_h, work_w = max(height, tile_h), max(width, tile_w)
+    overlap = max(0, min(overlap, tile_h // 2, tile_w // 2))
+    return (
+        work_h,
+        work_w,
+        overlap,
+        _starts(work_h, tile_h, overlap),
+        _starts(work_w, tile_w, overlap),
+    )
+
+
+def _holes(mask: np.ndarray, work_h: int, work_w: int) -> np.ndarray:
+    height, width = mask.shape[:2]
+    holes = np.zeros((work_h, work_w), dtype=np.uint8)
+    holes[:height, :width] = mask.astype(bool)
+    return holes
 
 
 def _starts(length: int, tile: int, overlap: int) -> list[int]:

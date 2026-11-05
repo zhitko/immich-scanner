@@ -116,7 +116,7 @@ CATALOG: dict[str, ModelSpec] = {
         id="inpaint",
         filename="lama.onnx",
         version="big-lama",
-        purpose="Fill thin scratches",
+        purpose="Fill scratches and creases",
         license_id="Apache-2.0",
         license_summary=(
             "LaMa, Roman Suvorov and others, Apache-2.0. "
