@@ -18,7 +18,7 @@ Order inside each area is the order to do the work. P1 is what makes the owner's
 - [ ] **P1.** Follow the Immich asset-update API off the deprecated `PUT /api/assets/{id}` from the v3.3.5 spec. Newer releases add `PATCH` and intend to drop `PUT`. Keep the v3.3.5 call working, and select the method from the server version.
 - [ ] **P2.** When a changed crop is uploaded, the previous Immich asset is left in place and a new one is created. Offer to remove the previous asset after the new one is stored, and say so before the upload.
 - [x] **P2.** Optional per-photo retouch, after the crop and before upload. Run it on CPU. The target laptop has Intel integrated graphics and 64 GB of RAM, so one photo at a time is the budget, not a batch of the whole bed.
-  - Upscale and denoise with a small Real-ESRGAN model.
+  - Upscale 4× and denoise are separate Real-ESRGAN steps. Upscale alone keeps texture. Denoise alone resizes the 4× denoising network back to the crop. Both run that network once and keep the enlargement.
   - Face restoration with CodeFormer or GFPGAN. These invent detail. Default them off, and label the preview as a reconstruction.
   - Optional colorization with DDColor, and optional scratch inpainting with LaMa. Both off unless chosen for that photo.
   - Keep the untouched crop on disk. Retouch writes a derivative. Upload sends the derivative only when the person picks it.

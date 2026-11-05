@@ -346,7 +346,7 @@
                       <span
                         class="meter"
                         role="progressbar"
-                        aria-label="Retouch progress"
+                        [attr.aria-label]="region.retouch_stage || 'Retouch progress'"
                         aria-valuemin="0"
                         aria-valuemax="100"
                         [attr.aria-valuenow]="region.retouch_progress"
@@ -362,7 +362,8 @@
                 }
                 @if (region.retouch_status === 'stale') {
                   <p class="banner small">
-                    The crop changed. Run retouch again before uploading that version.
+                    The crop or the retouch stages changed. Run retouch again before uploading
+                    that version.
                   </p>
                 }
                 <div class="retouch-options">
@@ -391,8 +392,22 @@
                       (change)="setRetouch('retouch_upscale', $any($event.target).checked)"
                       [disabled]="busy() || retouchingRegion(region)"
                     />
-                    Upscale and denoise
+                    Upscale
                   </label>
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [checked]="region.retouch_denoise"
+                      (change)="setRetouch('retouch_denoise', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
+                    Denoise
+                  </label>
+                  <p class="muted small">
+                    Upscale enlarges 4× with the detail-preserving model and does not denoise.
+                    Denoise uses the other network. On its own, that 4× result is resized back to
+                    this crop. With both on, that network runs once and the enlargement is kept.
+                  </p>
                   <label class="check">
                     <input
                       type="checkbox"

@@ -16,7 +16,7 @@ from app.retouch.options import (
     option_token,
     options_from_region,
 )
-from app.retouch.progress import clear_retouch_progress, set_retouch_progress
+from app.retouch.progress import clear_retouch_progress, set_retouch_progress, set_retouch_stage
 from app.runtime import Services
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ def handle_retouch(session: Session, job: Job, services: Services) -> None:
         raise RuntimeError("scan file is not available")
     options = options_from_region(region)
     if not options.any_selected():
-        raise RuntimeError("Choose upscale, faces, color, or scratches.")
+        raise RuntimeError("Choose upscale, denoise, faces, color, or scratches.")
     produced = f"{geometry_signature(region)}|{option_token(options)}"
     center_x = region.center_x
     center_y = region.center_y
@@ -72,6 +72,7 @@ def handle_retouch(session: Session, job: Job, services: Services) -> None:
             upright,
             options,
             on_progress=lambda percent: set_retouch_progress(region_id, percent),
+            on_stage=lambda stage: set_retouch_stage(region_id, stage),
         )
         del upright
         # The large PNG and its preview are still ahead. Hold the bar at 99 until they land.

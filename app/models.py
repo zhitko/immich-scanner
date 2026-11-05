@@ -58,6 +58,7 @@ class Region(Base):
     uploaded_crop_signature: Mapped[str | None] = mapped_column(String(512), nullable=True)
     upload_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     retouch_upscale: Mapped[bool] = mapped_column(Boolean, default=False)
+    retouch_denoise: Mapped[bool] = mapped_column(Boolean, default=False)
     retouch_faces: Mapped[bool] = mapped_column(Boolean, default=False)
     retouch_colorize: Mapped[bool] = mapped_column(Boolean, default=False)
     retouch_scratches: Mapped[bool] = mapped_column(Boolean, default=False)

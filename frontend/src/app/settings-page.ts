@@ -97,7 +97,12 @@ export class SettingsPage {
   }
 
   setStep(
-    key: 'retouch_upscale' | 'retouch_faces' | 'retouch_colorize' | 'retouch_scratches',
+    key:
+      | 'retouch_upscale'
+      | 'retouch_denoise'
+      | 'retouch_faces'
+      | 'retouch_colorize'
+      | 'retouch_scratches',
     checked: boolean,
   ): void {
     this.update(key, checked);

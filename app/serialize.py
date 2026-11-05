@@ -11,7 +11,7 @@ from app.retouch.options import (
     retouch_is_current,
     stored_geometry,
 )
-from app.retouch.progress import retouch_progress
+from app.retouch.progress import retouch_progress, retouch_stage
 from app.schemas import RegionOut, ScanDetail, ScanSummary
 
 
@@ -53,12 +53,14 @@ def region_out(region: Region) -> RegionOut:
         crop_changed=changed,
         needs_upload=needs_upload(region),
         retouch_upscale=bool(region.retouch_upscale),
+        retouch_denoise=bool(region.retouch_denoise),
         retouch_faces=bool(region.retouch_faces),
         retouch_colorize=bool(region.retouch_colorize),
         retouch_scratches=bool(region.retouch_scratches),
         upload_source=region.upload_source or "crop",
         retouch_status=status,
         retouch_progress=retouch_progress(region.id) if status == "running" else None,
+        retouch_stage=retouch_stage(region.id) if status == "running" else None,
         retouch_error=region.retouch_error,
         retouch_signature=region.retouch_signature,
         retouch_ready=ready,

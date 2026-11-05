@@ -46,6 +46,7 @@ _RETOUCH_FIELDS = {
     "angle_deg",
     "quarter_turns",
     "retouch_upscale",
+    "retouch_denoise",
     "retouch_faces",
     "retouch_colorize",
     "retouch_scratches",
@@ -264,6 +265,7 @@ def retouch_region(
     _require_files(scan)
     region = _region(session, scan, region_id)
     region.retouch_upscale = body.upscale
+    region.retouch_denoise = body.denoise
     region.retouch_faces = body.faces
     region.retouch_colorize = body.colorize
     region.retouch_scratches = body.scratches
@@ -352,7 +354,13 @@ def _apply_patch(scan: Scan, region: Region, body: RegionPatch) -> None:
         region.visibility = body.visibility
     if fields & _META_FIELDS:
         region.metadata_synced = False
-    for name in ("retouch_upscale", "retouch_faces", "retouch_colorize", "retouch_scratches"):
+    for name in (
+        "retouch_upscale",
+        "retouch_denoise",
+        "retouch_faces",
+        "retouch_colorize",
+        "retouch_scratches",
+    ):
         if name in fields and getattr(body, name) is not None:
             setattr(region, name, getattr(body, name))
     if fields & _RETOUCH_FIELDS:

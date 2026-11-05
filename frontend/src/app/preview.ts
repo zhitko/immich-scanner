@@ -73,6 +73,7 @@ export function uprightPixels(
 /**
  * Facts for the photo in the large preview. The retouch line uses the
  * enlarged file when that version is on screen and upscale was part of it.
+ * Denoise alone keeps the crop size.
  */
 export function formatPhotoFacts(
   region: {

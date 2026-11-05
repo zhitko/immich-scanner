@@ -25,6 +25,7 @@ class ArchiveSettings:
     width_mm: float | None = None
     height_mm: float | None = None
     retouch_upscale: bool = False
+    retouch_denoise: bool = False
     retouch_faces: bool = False
     retouch_colorize: bool = False
     retouch_scratches: bool = False
@@ -48,6 +49,7 @@ def load_settings(session: Session) -> ArchiveSettings:
     scan_mode = stored.get("scan_mode", "Color")
     if scan_mode not in SCAN_MODES:
         scan_mode = "Color"
+    upscale = _flag(stored.get("retouch_upscale"))
     return ArchiveSettings(
         immich_base_url=stored.get("immich_base_url", ""),
         immich_api_key=stored.get("immich_api_key", ""),
@@ -60,7 +62,8 @@ def load_settings(session: Session) -> ArchiveSettings:
         scan_mode=scan_mode,
         width_mm=_optional_mm(stored.get("width_mm", "")),
         height_mm=_optional_mm(stored.get("height_mm", "")),
-        retouch_upscale=_flag(stored.get("retouch_upscale")),
+        retouch_upscale=upscale,
+        retouch_denoise=_denoise(stored.get("retouch_denoise"), upscale),
         retouch_faces=_flag(stored.get("retouch_faces")),
         retouch_colorize=_flag(stored.get("retouch_colorize")),
         retouch_scratches=_flag(stored.get("retouch_scratches")),
@@ -81,6 +84,7 @@ def save_settings(session: Session, settings: ArchiveSettings) -> None:
         "width_mm": _format_mm(settings.width_mm),
         "height_mm": _format_mm(settings.height_mm),
         "retouch_upscale": _format_flag(settings.retouch_upscale),
+        "retouch_denoise": _format_flag(settings.retouch_denoise),
         "retouch_faces": _format_flag(settings.retouch_faces),
         "retouch_colorize": _format_flag(settings.retouch_colorize),
         "retouch_scratches": _format_flag(settings.retouch_scratches),
@@ -114,6 +118,7 @@ def seed_settings(session: Session, process: Settings) -> None:
         width_mm=current.width_mm,
         height_mm=current.height_mm,
         retouch_upscale=current.retouch_upscale,
+        retouch_denoise=current.retouch_denoise,
         retouch_faces=current.retouch_faces,
         retouch_colorize=current.retouch_colorize,
         retouch_scratches=current.retouch_scratches,
@@ -147,6 +152,7 @@ def _optional_mm(raw: str) -> float | None:
 def retouch_columns(settings: ArchiveSettings) -> dict[str, bool]:
     return {
         "retouch_upscale": settings.retouch_upscale,
+        "retouch_denoise": settings.retouch_denoise,
         "retouch_faces": settings.retouch_faces,
         "retouch_colorize": settings.retouch_colorize,
         "retouch_scratches": settings.retouch_scratches,
@@ -154,6 +160,14 @@ def retouch_columns(settings: ArchiveSettings) -> dict[str, bool]:
 
 
 def _flag(raw: str | None) -> bool:
+    return raw == "true"
+
+
+def _denoise(raw: str | None, upscale: bool) -> bool:
+    """A settings file from before the split stored only the combined step."""
+
+    if raw is None:
+        return upscale
     return raw == "true"
 
 
