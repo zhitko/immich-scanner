@@ -1,5 +1,7 @@
 <section class="panel wide editor-page">
-  <p class="crumbs"><a routerLink="/scans">← Waiting for review</a></p>
+  @if (!scan()) {
+    <a class="back back-solo" routerLink="/scans">← Waiting for review</a>
+  }
 
   @if (error()) {
     <div class="banner warn dismissable" role="alert">
@@ -13,7 +15,8 @@
 
   @if (scan(); as scan) {
     <div class="section-head">
-      <div>
+      <div class="section-copy">
+        <a class="back" routerLink="/scans">← Waiting for review</a>
         <h2>Scan from {{ formatStamp(scan.created_at) }}</h2>
         <p class="lede">
           {{ scan.regions.length }} {{ scan.regions.length === 1 ? 'photo' : 'photos' }} ·
@@ -66,25 +69,9 @@
       <p class="banner">The original file was removed. History and Immich ids are still here.</p>
     }
     @if (activeJob(); as job) {
-      @if (jobRunning()) {
-        <p
-          class="banner busy"
-          [class.progress]="job.type === 'retouch' && retouchPercent() !== null"
-        >
+      @if (jobRunning() && job.type !== 'retouch') {
+        <p class="banner busy">
           <span class="spinner" aria-hidden="true"></span>{{ jobMessage(job) }}
-          @if (job.type === 'retouch' && retouchPercent() !== null) {
-            <span
-              class="meter"
-              role="progressbar"
-              aria-label="Retouch progress"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              [attr.aria-valuenow]="retouchPercent()"
-              [attr.aria-valuetext]="retouchPercent() + '%'"
-            >
-              <span [style.width.%]="retouchPercent()"></span>
-            </span>
-          }
         </p>
       }
     }

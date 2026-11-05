@@ -237,19 +237,38 @@ main {
 .small {
   font-size: 0.85rem;
 }
-.crumbs {
-  margin: 0 0 14px;
-  font-size: 0.9rem;
-}
-.crumbs a {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.back {
   color: var(--muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
 }
-.crumbs a:hover {
+.back:hover {
   color: var(--text);
   text-decoration: none;
+}
+.back-solo {
+  display: inline-block;
+  margin: 0 0 14px;
+}
+.editor-page .section-copy {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 20px;
+  align-items: start;
+  min-width: 0;
+}
+.editor-page .section-copy .back {
+  grid-column: 1;
+  grid-row: 1;
+  margin-top: 0.32rem;
+}
+.editor-page .section-copy h2 {
+  grid-column: 2;
+  grid-row: 1;
+}
+.editor-page .section-copy .lede {
+  grid-column: 2;
+  grid-row: 2;
 }
 
 .section-head,
@@ -1528,6 +1547,13 @@ details.section[open] > summary {
   .section-head {
     align-items: stretch;
     flex-direction: column;
+  }
+  .editor-page .section-copy {
+    display: block;
+  }
+  .editor-page .section-copy .back {
+    display: inline-block;
+    margin: 0 0 2px;
   }
   .filters {
     flex-wrap: nowrap;
