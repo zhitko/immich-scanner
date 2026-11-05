@@ -198,8 +198,20 @@
             [checked]="settings.retouch_upscale"
             (change)="setStep('retouch_upscale', $any($event.target).checked)"
           />
-          Upscale and denoise
+          Upscale
         </label>
+        <label class="check">
+          <input
+            type="checkbox"
+            [checked]="settings.retouch_denoise"
+            (change)="setStep('retouch_denoise', $any($event.target).checked)"
+          />
+          Denoise
+        </label>
+        <p class="hint">
+          Upscale enlarges 4× and does not denoise. Denoise on its own resizes the 4× denoising
+          network back to the crop. Both run that denoising network once and keep the enlargement.
+        </p>
         <label class="check">
           <input
             type="checkbox"

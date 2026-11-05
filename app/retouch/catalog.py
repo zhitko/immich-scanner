@@ -33,15 +33,17 @@ CATALOG: dict[str, ModelSpec] = {
         id="upscale",
         filename="realesr-general-x4v3.onnx",
         version="general-x4v3",
-        purpose="Upscale 4× and denoise",
+        purpose="Denoise",
         license_id="BSD-3-Clause",
         license_summary=(
             "Real-ESRGAN, Xintao Wang, BSD-3-Clause. "
             "This ONNX is a conversion of the official realesr-general-x4v3 weights "
             "from the v0.2.5.0 release, published by CoderViking. "
-            "It takes an RGB image in 0..1 and returns one at 4×. "
-            "If a graph has a second input, it is read as a denoise strength in 0..1 "
-            "and this app passes 0.5. This export has one input."
+            "Those weights are the strong-denoise end of the official pair "
+            "(denoise strength 1). It takes an RGB image in 0..1 and returns one at 4×. "
+            "This export has one input. Denoise alone resizes that result back to the crop. "
+            "With upscale on, the 4× image is kept and the other network is not run. "
+            "A second input, if a graph has one, is a denoise strength, and this step passes 1."
         ),
         source_url="https://huggingface.co/CoderViking/realesr-general-x4v3-onnx",
         download_url=(
@@ -49,6 +51,29 @@ CATALOG: dict[str, ModelSpec] = {
             "resolve/main/realesr-general-x4v3.onnx"
         ),
         sha256="1940a93ee08283a0a7286183186357b1688fe9fa8ede74604b424586aaddf112",
+    ),
+    "scale": ModelSpec(
+        id="scale",
+        filename="realesr-general-wdn-x4v3.onnx",
+        version="general-wdn-x4v3",
+        purpose="Upscale 4×",
+        license_id="BSD-3-Clause",
+        license_summary=(
+            "Real-ESRGAN, Xintao Wang, BSD-3-Clause. "
+            "Official realesr-general-wdn-x4v3 weights from the v0.2.5.0 release: "
+            "the denoise-strength 0 end of that pair, which keeps texture. "
+            "This ONNX is the conversion published by ricardo-manuel-22. "
+            "Its weights match that official file, and the graph clips the 4× image to 0..1. "
+            "One RGB input in 0..1. Used only when upscale is on and denoise is off, "
+            "so the denoising network is not applied. "
+            "A second input, if a graph has one, is a denoise strength, and this step passes 0."
+        ),
+        source_url="https://huggingface.co/ricardo-manuel-22/editoria-models",
+        download_url=(
+            "https://huggingface.co/ricardo-manuel-22/editoria-models/"
+            "resolve/main/realesr-general-wdn-x4v3.onnx"
+        ),
+        sha256="5073c57599850fe59320473ab5e07a91ac7de3af916ef44d5eef2218c7d0b33a",
     ),
     "faces": ModelSpec(
         id="faces",
@@ -131,14 +156,53 @@ CATALOG: dict[str, ModelSpec] = {
 }
 
 
-def specs_for(*, upscale: bool, faces: bool, colorize: bool, scratches: bool) -> list[ModelSpec]:
+@dataclass(frozen=True)
+class Restoration:
+    """One Real-ESRGAN pass. Both networks emit 4×, so the steps share that pass."""
+
+    model_id: str
+    keep_scale: bool
+    stage: str
+
+
+def restoration_for(*, upscale: bool, denoise: bool) -> Restoration | None:
+    """Pick the single network for this combination.
+
+    Official Real-ESRGAN interpolates two 4× weight files and then resizes to the
+    requested output scale. Strength 0 is ``realesr-general-wdn-x4v3`` (keep
+    texture). Strength 1 is ``realesr-general-x4v3`` (strong denoise). There is
+    no 1× denoiser. Denoise alone therefore runs the strong-denoise network and
+    the caller resizes back to the crop. Both steps use that same network once
+    and keep the 4× image, which is strength 1 with no second enlargement.
+    """
+
+    if denoise:
+        return Restoration(
+            model_id="upscale",
+            keep_scale=upscale,
+            stage="Upscaling and denoising" if upscale else "Denoising",
+        )
+    if upscale:
+        return Restoration(model_id="scale", keep_scale=True, stage="Upscaling")
+    return None
+
+
+def specs_for(
+    *,
+    upscale: bool,
+    denoise: bool,
+    faces: bool,
+    colorize: bool,
+    scratches: bool,
+) -> list[ModelSpec]:
     needed: list[ModelSpec] = []
     if scratches:
         needed.append(CATALOG["inpaint"])
     if colorize:
         needed.append(CATALOG["colorize"])
-    if upscale:
-        needed.append(CATALOG["upscale"])
+    plan = restoration_for(upscale=upscale, denoise=denoise)
+    if plan is not None:
+        needed.append(CATALOG[plan.model_id])
     if faces:
         needed.extend((CATALOG["face-detection"], CATALOG["faces"]))
     return needed

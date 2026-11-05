@@ -5,7 +5,7 @@ from typing import Protocol
 import cv2
 import numpy as np
 
-from app.retouch.catalog import CATALOG, ModelSpec, specs_for
+from app.retouch.catalog import CATALOG, ModelSpec, restoration_for, specs_for
 from app.retouch.imageops import (
     apply_ab,
     as_nchw,
@@ -27,7 +27,6 @@ from app.retouch.options import RetouchOptions
 from app.retouch.scratch import scratch_mask
 from app.retouch.session import open_session
 
-_DENOISE = np.array(0.5, dtype=np.float32)
 _LAMA_SIZE = 512
 _LAMA_OVERLAP = 64
 # A neural tile is one unit. The scratch mask and colorizer are weighed so the
@@ -37,6 +36,7 @@ _COLOR_UNITS = 4
 _FACE_DETECT_UNITS = 1
 _FACE_UNITS = 3
 _FACE_GUESS = 1
+_RESIZE_UNITS = 1
 
 
 class MissingWeights(RuntimeError):
@@ -49,6 +49,7 @@ class Retoucher(Protocol):
         image: np.ndarray,
         options: RetouchOptions,
         on_progress: Callable[[int], None] | None = None,
+        on_stage: Callable[[str], None] | None = None,
     ) -> np.ndarray: ...
 
 
@@ -71,13 +72,16 @@ class OnnxRetoucher:
         image: np.ndarray,
         options: RetouchOptions,
         on_progress: Callable[[int], None] | None = None,
+        on_stage: Callable[[str], None] | None = None,
     ) -> np.ndarray:
         self._require(options)
         budget = self._budget(image, options, on_progress)
-        # Scratches and color run on the crop. The upscaler runs next, then faces,
-        # so restoration sees the enlarged print and the other models do not.
+        # Scratches and color run on the crop. Scale and denoise are one
+        # Real-ESRGAN pass after that: both networks emit 4×, so a second pass
+        # would enlarge twice. Faces run last and see the image that will be saved.
         result = image
         if options.scratches:
+            _announce(on_stage, "Filling scratches")
             mask = scratch_mask(result)
             if budget is not None:
                 budget.add(_MASK_UNITS)
@@ -93,15 +97,22 @@ class OnnxRetoucher:
                     on_tile=None if budget is None else lambda: budget.add(1),
                 )
         if options.colorize:
+            _announce(on_stage, "Colorizing")
             result = self._colorize(result)
             if budget is not None:
                 budget.add(_COLOR_UNITS)
-        if options.upscale:
-            result = self._upscale(
+        plan = restoration_for(upscale=options.upscale, denoise=options.denoise)
+        if plan is not None:
+            _announce(on_stage, plan.stage)
+            result = self._restore(
                 result,
+                plan.model_id,
+                keep_scale=plan.keep_scale,
+                denoise_strength=1.0 if options.denoise else 0.0,
                 on_tile=None if budget is None else lambda: budget.add(1),
             )
         if options.faces:
+            _announce(on_stage, "Restoring faces")
             result = self._faces(
                 result,
                 on_detected=None if budget is None else budget.note_faces,
@@ -125,9 +136,12 @@ class OnnxRetoucher:
             total += _MASK_UNITS
         if options.colorize:
             total += _COLOR_UNITS
-        if options.upscale:
-            tile, overlap = self._upscale_layout()
+        plan = restoration_for(upscale=options.upscale, denoise=options.denoise)
+        if plan is not None:
+            tile, overlap = self._layout(self._session(CATALOG[plan.model_id]))
             total += square_tile_count(image.shape[0], image.shape[1], tile, overlap)
+            if not plan.keep_scale:
+                total += _RESIZE_UNITS
         if options.faces:
             # A guess, so the bar does not cost a detection. The real one corrects it.
             face_estimate = _FACE_GUESS
@@ -139,6 +153,7 @@ class OnnxRetoucher:
             (name, spec.license_id)
             for spec in specs_for(
                 upscale=options.upscale,
+                denoise=options.denoise,
                 faces=options.faces,
                 colorize=options.colorize,
                 scratches=options.scratches,
@@ -167,27 +182,38 @@ class OnnxRetoucher:
         self._sessions[spec.id] = (stamp, opened)
         return opened
 
-    def _upscale_layout(self) -> tuple[int, int]:
-        session = self._session(CATALOG["upscale"])
+    def _layout(self, session) -> tuple[int, int]:
         spatial = _spatial(session.get_inputs()[0].shape)
         tile = spatial[0] or spatial[1] or 256
         overlap = min(16, max(0, tile // 8))
         return tile, overlap
 
-    def _upscale(
+    def _restore(
         self,
         image: np.ndarray,
+        model_id: str,
+        *,
+        keep_scale: bool,
+        denoise_strength: float,
         on_tile: Callable[[], None] | None = None,
     ) -> np.ndarray:
-        session = self._session(CATALOG["upscale"])
-        tile, overlap = self._upscale_layout()
-        return tiled_map(
+        session = self._session(CATALOG[model_id])
+        tile, overlap = self._layout(session)
+        result = tiled_map(
             image,
-            lambda tile_image: _run_upscale_tile(session, tile_image),
+            lambda tile_image: _run_upscale_tile(session, tile_image, denoise_strength),
             tile=tile,
             overlap=overlap,
             on_tile=on_tile,
         )
+        if keep_scale:
+            return result
+        height, width = image.shape[:2]
+        if result.shape[0] != height or result.shape[1] != width:
+            result = cv2.resize(result, (width, height), interpolation=cv2.INTER_LANCZOS4)
+        if on_tile is not None:
+            on_tile()
+        return result
 
     def _colorize(self, image: np.ndarray) -> np.ndarray:
         session = self._session(CATALOG["colorize"])
@@ -327,13 +353,26 @@ def detect_faces(image: np.ndarray, model_path: Path) -> list[np.ndarray]:
     return found
 
 
-def _run_upscale_tile(session, tile: np.ndarray) -> np.ndarray:
+def _run_upscale_tile(
+    session,
+    tile: np.ndarray,
+    denoise_strength: float | None = None,
+) -> np.ndarray:
     tensor = as_nchw(tile)
     feeds = {session.get_inputs()[0].name: tensor}
     if len(session.get_inputs()) > 1:
-        feeds[session.get_inputs()[1].name] = _DENOISE
+        # Strength 0 is the detail-preserving network. Strength 1 is the
+        # denoising network. The pinned exports have no such input.
+        if denoise_strength is None:
+            raise RuntimeError("this upscaler input is a denoise strength")
+        feeds[session.get_inputs()[1].name] = np.array(denoise_strength, dtype=np.float32)
     # Real-ESRGAN returns 0..1 and overshoots a little at hard edges.
     return unit_to_rgb(from_model(session.run(None, feeds)[0]))
+
+
+def _announce(on_stage: Callable[[str], None] | None, stage: str) -> None:
+    if on_stage is not None:
+        on_stage(stage)
 
 
 def _run_gfpgan(session, face: np.ndarray) -> np.ndarray:

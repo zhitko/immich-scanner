@@ -25,12 +25,14 @@ export interface Region {
   crop_changed: boolean;
   needs_upload: boolean;
   retouch_upscale: boolean;
+  retouch_denoise: boolean;
   retouch_faces: boolean;
   retouch_colorize: boolean;
   retouch_scratches: boolean;
   upload_source: 'crop' | 'retouch';
   retouch_status: string;
   retouch_progress: number | null;
+  retouch_stage: string | null;
   retouch_error: string | null;
   retouch_signature: string | null;
   retouch_ready: boolean;
@@ -85,6 +87,7 @@ export interface Settings {
   width_mm: number | null;
   height_mm: number | null;
   retouch_upscale: boolean;
+  retouch_denoise: boolean;
   retouch_faces: boolean;
   retouch_colorize: boolean;
   retouch_scratches: boolean;
@@ -153,6 +156,7 @@ export interface RetouchModel {
 
 export interface RetouchChoice {
   upscale: boolean;
+  denoise: boolean;
   faces: boolean;
   colorize: boolean;
   scratches: boolean;
@@ -160,6 +164,7 @@ export interface RetouchChoice {
 
 export interface RetouchPatch {
   retouch_upscale?: boolean;
+  retouch_denoise?: boolean;
   retouch_faces?: boolean;
   retouch_colorize?: boolean;
   retouch_scratches?: boolean;

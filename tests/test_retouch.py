@@ -1,4 +1,5 @@
 import hashlib
+import sqlite3
 import threading
 import zipfile
 from dataclasses import replace
@@ -6,12 +7,14 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from alembic.config import Config
 from PIL import Image
 
+from alembic import command
 from app.clock import utcnow
-from app.imaging.crop import upright_crop
+from app.imaging.crop import crop_signature, upright_crop
 from app.imaging.io import load_rgb
-from app.models import Job, Region
+from app.models import Job, Region, Setting
 from app.retouch.catalog import CATALOG, ExtraFile
 from app.retouch.engine import MissingWeights, OnnxRetoucher, _Budget, _run_upscale_tile
 from app.retouch.fetch import (
@@ -37,8 +40,19 @@ from app.retouch.imageops import (
     tiled_map,
     warp_face,
 )
-from app.retouch.options import RetouchOptions
-from app.retouch.progress import clear_retouch_progress, retouch_progress, set_retouch_progress
+from app.retouch.options import (
+    RetouchOptions,
+    flags_restore_faces,
+    options_from_token,
+    retouch_is_current,
+)
+from app.retouch.progress import (
+    clear_retouch_progress,
+    retouch_progress,
+    retouch_stage,
+    set_retouch_progress,
+    set_retouch_stage,
+)
 from app.retouch.scratch import scratch_mask
 from app.retouch.session import execution_providers
 from tests.synthetic import encode_png, make_bed
@@ -48,9 +62,18 @@ _YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa
 
 
 class MarkRetoucher:
-    def apply(self, image: np.ndarray, options: RetouchOptions, on_progress=None) -> np.ndarray:
+    def apply(
+        self,
+        image: np.ndarray,
+        options: RetouchOptions,
+        on_progress=None,
+        on_stage=None,
+    ) -> np.ndarray:
         out = np.array(image, copy=True)
-        out[:12, :12] = (255, 0, 0)
+        if options.denoise and not options.upscale:
+            out[:12, :12] = (0, 0, 255)
+        else:
+            out[:12, :12] = (255, 0, 0)
         if options.faces:
             out[:12, -12:] = (0, 255, 0)
         if options.upscale:
@@ -212,7 +235,7 @@ def test_budget_holds_its_percent_when_more_faces_turn_up() -> None:
 
 
 def test_upscale_reports_a_rising_percent(tmp_path, monkeypatch) -> None:
-    (tmp_path / CATALOG["upscale"].filename).write_bytes(b"onnx")
+    (tmp_path / CATALOG["scale"].filename).write_bytes(b"onnx")
 
     class Input:
         name = "input"
@@ -233,6 +256,95 @@ def test_upscale_reports_a_rising_percent(tmp_path, monkeypatch) -> None:
     assert seen[-1] == 99
     assert seen == sorted(seen)
     assert len(seen) == square_tile_count(20, 24, 8, 1)
+
+
+def test_scale_and_denoise_each_run_once_and_keep_their_size(tmp_path, monkeypatch) -> None:
+    opened: list[str] = []
+    calls = {"n": 0}
+
+    class Input:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.shape = [1, 3, 8, 8]
+
+    class Net:
+        def __init__(self, second: bool = False) -> None:
+            self.second = second
+            self.strengths: list[float] = []
+
+        def get_inputs(self):
+            inputs = [Input("image")]
+            if self.second:
+                inputs.append(Input("denoise"))
+            return inputs
+
+        def run(self, _outputs, feeds):
+            calls["n"] += 1
+            if self.second:
+                self.strengths.append(float(feeds["denoise"]))
+            lifted = np.clip(feeds["image"] + 0.2, 0, 1)
+            return [np.repeat(np.repeat(lifted, 2, axis=2), 2, axis=3)]
+
+    net = Net()
+    monkeypatch.setattr(
+        "app.retouch.engine.open_session",
+        lambda path, _execution, _device: opened.append(Path(path).name) or net,
+    )
+    image = np.full((20, 24, 3), 40, dtype=np.uint8)
+    tiles = square_tile_count(20, 24, 8, 1)
+    retoucher = OnnxRetoucher(tmp_path)
+
+    untouched = retoucher.apply(image, RetouchOptions())
+    assert np.array_equal(untouched, image)
+    assert opened == []
+    assert calls["n"] == 0
+
+    def run(options: RetouchOptions, filename: str) -> tuple[np.ndarray, list[str]]:
+        for spec in (CATALOG["upscale"], CATALOG["scale"]):
+            (tmp_path / spec.filename).unlink(missing_ok=True)
+        (tmp_path / filename).write_bytes(b"onnx")
+        retoucher._sessions.clear()
+        opened.clear()
+        calls["n"] = 0
+        stages: list[str] = []
+        result = retoucher.apply(image, options, on_stage=stages.append)
+        return result, stages
+
+    denoised, denoise_stages = run(RetouchOptions(denoise=True), CATALOG["upscale"].filename)
+    assert denoise_stages == ["Denoising"]
+    assert opened == [CATALOG["upscale"].filename]
+    assert calls["n"] == tiles
+    assert denoised.shape == image.shape
+    assert np.all(denoised == 91)
+
+    scaled, scale_stages = run(RetouchOptions(upscale=True), CATALOG["scale"].filename)
+    assert scale_stages == ["Upscaling"]
+    assert opened == [CATALOG["scale"].filename]
+    assert calls["n"] == tiles
+    assert scaled.shape == (40, 48, 3)
+    assert np.all(scaled == 91)
+
+    both, both_stages = run(
+        RetouchOptions(upscale=True, denoise=True),
+        CATALOG["upscale"].filename,
+    )
+    assert both_stages == ["Upscaling and denoising"]
+    assert opened == [CATALOG["upscale"].filename]
+    assert calls["n"] == tiles
+    assert both.shape == (40, 48, 3)
+    assert np.all(both == 91)
+
+    (tmp_path / CATALOG["upscale"].filename).write_bytes(b"onnx")
+    (tmp_path / CATALOG["scale"].filename).write_bytes(b"onnx")
+    retoucher._sessions.clear()
+    net.second = True
+    calls["n"] = 0
+    retoucher.apply(image, RetouchOptions(denoise=True))
+    assert net.strengths
+    assert set(net.strengths) == {1.0}
+    net.strengths.clear()
+    retoucher.apply(image, RetouchOptions(upscale=True))
+    assert set(net.strengths) == {0.0}
 
 
 def test_a_changed_model_file_opens_a_new_session(tmp_path, monkeypatch) -> None:
@@ -762,6 +874,7 @@ def test_new_photos_start_with_the_saved_steps(client, app_bundle) -> None:
     )
     assert saved.status_code == 200
     assert saved.json()["retouch_upscale"] is True
+    assert saved.json()["retouch_denoise"] is True
     assert saved.json()["retouch_faces"] is False
     assert saved.json()["retouch_scratches"] is False
 
@@ -770,6 +883,7 @@ def test_new_photos_start_with_the_saved_steps(client, app_bundle) -> None:
     assert app.state.worker.process_available() == 1
     detected = client.get(f"/api/scans/{scan_id}").json()["regions"][0]
     assert detected["retouch_upscale"] is True
+    assert detected["retouch_denoise"] is True
     assert detected["retouch_colorize"] is True
     assert detected["retouch_faces"] is False
 
@@ -822,6 +936,8 @@ def test_retouch_keeps_the_crop_and_upload_uses_it_only_when_chosen(client, app_
         json={"upscale": True, "faces": False, "colorize": False, "scratches": False},
     )
     assert started.status_code == 202
+    assert started.json()["region"]["retouch_upscale"] is True
+    assert started.json()["region"]["retouch_denoise"] is True
     again = client.post(
         f"/api/scans/{scan_id}/regions/{first['id']}/retouch",
         json={"upscale": True, "faces": False, "colorize": False, "scratches": False},
@@ -965,6 +1081,245 @@ def test_missing_weights_fail_the_photo_and_leave_the_crop(client, app_bundle) -
     assert after["upload_status"] == "failed"
     assert "not ready" in after["upload_error"]
     assert gateway.uploads == []
+
+
+def test_scale_denoise_both_and_neither_keep_their_dimensions(client, app_bundle) -> None:
+    app, services = app_bundle
+    services.retoucher = MarkRetoucher()
+    scan_id = _import_bed(services, encode_png(make_bed()))
+    assert app.state.worker.process_available() == 1
+    region_id = client.get(f"/api/scans/{scan_id}").json()["regions"][0]["id"]
+    url = f"/api/scans/{scan_id}/regions/{region_id}/retouch"
+
+    neither = client.post(
+        url,
+        json={
+            "upscale": False,
+            "denoise": False,
+            "faces": False,
+            "colorize": False,
+            "scratches": False,
+        },
+    )
+    assert neither.status_code == 422
+
+    def finish(body: dict) -> dict:
+        queued = client.post(url, json=body)
+        assert queued.status_code == 202
+        assert app.state.worker.process_available() == 1
+        done = client.get(f"/api/scans/{scan_id}").json()["regions"]
+        return next(item for item in done if item["id"] == region_id)
+
+    denoised = finish(
+        {
+            "upscale": False,
+            "denoise": True,
+            "faces": False,
+            "colorize": False,
+            "scratches": False,
+        }
+    )
+    assert denoised["retouch_denoise"] is True
+    assert denoised["retouch_upscale"] is False
+    assert denoised["retouch_signature"].endswith("u0d1f0c0s0")
+    _assert_derivative(services, scan_id, denoised, scale=1, color=(0, 0, 255))
+
+    scaled = finish(
+        {
+            "upscale": True,
+            "denoise": False,
+            "faces": False,
+            "colorize": False,
+            "scratches": False,
+        }
+    )
+    assert scaled["retouch_denoise"] is False
+    assert scaled["retouch_signature"].endswith("u1d0f0c0s0")
+    _assert_derivative(services, scan_id, scaled, scale=2, color=(255, 0, 0))
+
+    both = finish(
+        {
+            "upscale": True,
+            "denoise": True,
+            "faces": False,
+            "colorize": False,
+            "scratches": False,
+        }
+    )
+    assert both["retouch_signature"].endswith("u1d1f0c0s0")
+    _assert_derivative(services, scan_id, both, scale=2, color=(255, 0, 0))
+
+    stale = client.patch(
+        f"/api/scans/{scan_id}/regions/{region_id}",
+        json={"retouch_denoise": False},
+    )
+    assert stale.status_code == 200
+    assert stale.json()["retouch_upscale"] is True
+    assert stale.json()["retouch_denoise"] is False
+    assert stale.json()["retouch_status"] == "stale"
+    assert stale.json()["retouch_ready"] is False
+
+
+def test_an_old_combined_signature_stays_current() -> None:
+    now = utcnow()
+    region = Region(
+        id="region",
+        scan_id="scan",
+        position=0,
+        center_x=10,
+        center_y=20,
+        width=30,
+        height=40,
+        angle_deg=1.5,
+        quarter_turns=0,
+        created_at=now,
+        updated_at=now,
+        retouch_upscale=True,
+        retouch_denoise=True,
+        retouch_status="ready",
+        retouch_path="scans/scan/retouch/region.png",
+    )
+    geometry = crop_signature(10, 20, 30, 40, 1.5, 0)
+    region.retouch_signature = f"{geometry}|u1f0c0s0"
+    assert options_from_token("u1f0c0s0") == RetouchOptions(upscale=True, denoise=True)
+    assert retouch_is_current(region)
+    assert flags_restore_faces(region.retouch_signature) is False
+    assert flags_restore_faces(f"{geometry}|u1d0f1c0s0") is True
+    region.retouch_denoise = False
+    assert retouch_is_current(region) is False
+    region.retouch_denoise = True
+    region.retouch_signature = f"{geometry}|u1d1f0c0s0"
+    assert retouch_is_current(region)
+
+
+def test_saved_settings_without_denoise_still_mean_both(client, app_bundle) -> None:
+    saved = client.put(
+        "/api/settings",
+        json={
+            "immich_base_url": "",
+            "immich_api_key": "",
+            "output_format": "jpeg",
+            "jpeg_quality": 95,
+            "default_album_id": "",
+            "retouch_upscale": True,
+        },
+    )
+    assert saved.status_code == 200
+    assert saved.json()["retouch_denoise"] is True
+
+    explicit = client.put(
+        "/api/settings",
+        json={
+            "immich_base_url": "",
+            "immich_api_key": "",
+            "output_format": "jpeg",
+            "jpeg_quality": 95,
+            "default_album_id": "",
+            "retouch_upscale": True,
+            "retouch_denoise": False,
+        },
+    )
+    assert explicit.json()["retouch_upscale"] is True
+    assert explicit.json()["retouch_denoise"] is False
+
+    _app, services = app_bundle
+    with services.session_factory() as session:
+        stored = session.get(Setting, "retouch_denoise")
+        assert stored is not None
+        session.delete(stored)
+        session.commit()
+    again = client.get("/api/settings").json()
+    assert again["retouch_upscale"] is True
+    assert again["retouch_denoise"] is True
+
+    explicit = client.put(
+        "/api/settings",
+        json={
+            "immich_base_url": "",
+            "immich_api_key": "",
+            "output_format": "jpeg",
+            "jpeg_quality": 95,
+            "default_album_id": "",
+            "retouch_upscale": True,
+            "retouch_denoise": False,
+        },
+    )
+    scan_id = _import_bed(services, encode_png(make_bed(speck=False)))
+    assert _app.state.worker.process_available() == 1
+    photo = client.get(f"/api/scans/{scan_id}").json()["regions"][0]
+    assert photo["retouch_upscale"] is True
+    assert photo["retouch_denoise"] is False
+
+
+def test_existing_rows_copy_upscale_into_denoise(tmp_path) -> None:
+    database = tmp_path / "legacy.db"
+    configuration = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    configuration.set_main_option(
+        "script_location",
+        str(Path(__file__).resolve().parents[1] / "alembic"),
+    )
+    configuration.set_main_option("sqlalchemy.url", f"sqlite:///{database}")
+    command.upgrade(configuration, "0002_retouch")
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO scans (id, created_at, original_filename, width, height, upload_state) "
+            "VALUES ('scan', '2020-01-01 00:00:00', 'bed.png', 10, 10, 'pending')"
+        )
+        connection.executemany(
+            "INSERT INTO regions ("
+            "id, scan_id, position, center_x, center_y, width, height, angle_deg, "
+            "upload_status, created_at, updated_at, retouch_upscale"
+            ") VALUES (?, 'scan', ?, 1, 1, 4, 4, 0, 'pending', "
+            "'2020-01-01 00:00:00', '2020-01-01 00:00:00', ?)",
+            (("on", 0, 1), ("off", 1, 0)),
+        )
+    command.upgrade(configuration, "head")
+    with sqlite3.connect(database) as connection:
+        rows = dict(connection.execute("SELECT id, retouch_denoise FROM regions"))
+    assert rows == {"on": 1, "off": 0}
+
+
+def test_retouch_stage_stays_with_later_percents() -> None:
+    region_id = "stage-region"
+    clear_retouch_progress(region_id)
+    try:
+        set_retouch_progress(region_id, 10)
+        set_retouch_stage(region_id, "Denoising")
+        set_retouch_progress(region_id, 40)
+        assert retouch_progress(region_id) == 40
+        assert retouch_stage(region_id) == "Denoising"
+    finally:
+        clear_retouch_progress(region_id)
+    assert retouch_stage(region_id) is None
+
+
+def test_scale_only_asks_for_the_detail_model_and_both_do_not(tmp_path) -> None:
+    models = tmp_path
+    (models / CATALOG["upscale"].filename).write_bytes(b"onnx")
+    OnnxRetoucher(models)._require(RetouchOptions(upscale=True, denoise=True))
+    with pytest.raises(MissingWeights, match="realesr-general-wdn-x4v3.onnx"):
+        OnnxRetoucher(models)._require(RetouchOptions(upscale=True))
+    (models / CATALOG["scale"].filename).write_bytes(b"onnx")
+    OnnxRetoucher(models)._require(RetouchOptions(upscale=True))
+    with pytest.raises(MissingWeights, match="realesr-general-x4v3.onnx"):
+        OnnxRetoucher(tmp_path / "empty")._require(RetouchOptions(denoise=True))
+
+
+def _assert_derivative(services, scan_id: str, region: dict, *, scale: int, color: tuple) -> None:
+    bed, _dpi = load_rgb(services.storage.root / "scans" / scan_id / "original.png")
+    expected = upright_crop(
+        bed,
+        region["center_x"],
+        region["center_y"],
+        region["width"],
+        region["height"],
+        region["angle_deg"],
+        region["quarter_turns"],
+    )
+    derivative, _dpi = load_rgb(services.storage.absolute(_retouch_path(services, region["id"])))
+    assert derivative.shape[0] == expected.shape[0] * scale
+    assert derivative.shape[1] == expected.shape[1] * scale
+    assert np.all(derivative[:12, :12] == color)
 
 
 def _assert_crop_was_kept(services, scan_id: str, region: dict, *, scaled: bool) -> None:

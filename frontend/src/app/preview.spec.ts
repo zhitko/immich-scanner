@@ -77,6 +77,18 @@ describe('retouch preview choice', () => {
     );
   });
 
+  it('keeps the crop size when the retouch on screen was not upscaled', () => {
+    const region = {
+      width: 800,
+      height: 600,
+      quarter_turns: 0,
+      retouch_upscale: false,
+    };
+    expect(formatPhotoFacts(region, 300, 'retouch')).toBe(
+      '800 × 600 px · 0.5 MP · 300 dpi · 6.8 × 5.1 cm',
+    );
+  });
+
   it('says which pixels an upload will send', () => {
     expect(uploadVersionLabel({ upload_source: 'crop', retouch_ready: false })).toBe(
       'Upload sends the original crop.',

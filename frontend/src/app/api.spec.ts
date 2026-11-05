@@ -22,6 +22,7 @@ describe('ArchiveApi', () => {
     width_mm: null,
     height_mm: null,
     retouch_upscale: false,
+    retouch_denoise: false,
     retouch_faces: false,
     retouch_colorize: false,
     retouch_scratches: false,
@@ -89,6 +90,7 @@ describe('ArchiveApi', () => {
     api
       .retouch('scan-1', 'region-1', {
         upscale: true,
+        denoise: false,
         faces: false,
         colorize: false,
         scratches: false,
@@ -98,6 +100,7 @@ describe('ArchiveApi', () => {
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual({
       upscale: true,
+      denoise: false,
       faces: false,
       colorize: false,
       scratches: false,

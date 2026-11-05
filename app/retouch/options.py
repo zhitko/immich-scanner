@@ -4,24 +4,28 @@ from dataclasses import dataclass
 from app.imaging.crop import crop_signature
 from app.models import Region
 
-_FLAGS = re.compile(r"u([01])f([01])c([01])s([01])$")
+# The denoise bit is optional. A saved token without it is the old combined
+# "upscale and denoise" step, so that bit follows the upscale bit.
+_TOKEN = re.compile(r"u([01])(?:d([01]))?f([01])c([01])s([01])$")
 _RETOUCH_MARKER = "|retouch|"
 
 
 @dataclass(frozen=True)
 class RetouchOptions:
     upscale: bool = False
+    denoise: bool = False
     faces: bool = False
     colorize: bool = False
     scratches: bool = False
 
     def any_selected(self) -> bool:
-        return self.upscale or self.faces or self.colorize or self.scratches
+        return self.upscale or self.denoise or self.faces or self.colorize or self.scratches
 
 
 def options_from_region(region: Region) -> RetouchOptions:
     return RetouchOptions(
         upscale=bool(region.retouch_upscale),
+        denoise=bool(region.retouch_denoise),
         faces=bool(region.retouch_faces),
         colorize=bool(region.retouch_colorize),
         scratches=bool(region.retouch_scratches),
@@ -31,9 +35,25 @@ def options_from_region(region: Region) -> RetouchOptions:
 def option_token(options: RetouchOptions) -> str:
     return (
         f"u{int(options.upscale)}"
+        f"d{int(options.denoise)}"
         f"f{int(options.faces)}"
         f"c{int(options.colorize)}"
         f"s{int(options.scratches)}"
+    )
+
+
+def options_from_token(token: str) -> RetouchOptions | None:
+    match = _TOKEN.fullmatch(token)
+    if match is None:
+        return None
+    upscale = match.group(1) == "1"
+    denoise_bit = match.group(2)
+    return RetouchOptions(
+        upscale=upscale,
+        denoise=upscale if denoise_bit is None else denoise_bit == "1",
+        faces=match.group(3) == "1",
+        colorize=match.group(4) == "1",
+        scratches=match.group(5) == "1",
     )
 
 
@@ -70,16 +90,12 @@ def stored_geometry(signature: str | None) -> str:
 def flags_restore_faces(signature: str | None) -> bool:
     if not signature:
         return False
-    match = _FLAGS.search(signature)
-    return bool(match and match.group(2) == "1")
+    parsed = options_from_token(signature.rpartition("|")[2])
+    return bool(parsed and parsed.faces)
 
 
 def retouch_is_current(region: Region) -> bool:
-    return (
-        region.retouch_status == "ready"
-        and bool(region.retouch_path)
-        and region.retouch_signature == expected_retouch_signature(region)
-    )
+    return region.retouch_status == "ready" and retouch_matches(region)
 
 
 def sync_retouch_status(region: Region) -> None:
@@ -100,6 +116,12 @@ def sync_retouch_status(region: Region) -> None:
 
 
 def retouch_matches(region: Region) -> bool:
-    return bool(region.retouch_path) and region.retouch_signature == expected_retouch_signature(
-        region
-    )
+    if not region.retouch_path or not region.retouch_signature:
+        return False
+    if region.retouch_signature == expected_retouch_signature(region):
+        return True
+    # A derivative from before denoise was its own bit stays current when the
+    # saved upscale bit still means both steps and the crop is unchanged.
+    prefix, _separator, token = region.retouch_signature.rpartition("|")
+    stored = options_from_token(token)
+    return stored == options_from_region(region) and prefix == geometry_signature(region)

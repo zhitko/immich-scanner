@@ -365,14 +365,13 @@ export class EditorPage {
       return 'Finding photos on the bed…';
     }
     if (job.type === 'retouch') {
-      if (job.status === 'queued') {
-        return 'Waiting to retouch this photo…';
+      const region = this.scan()?.regions.find((candidate) => candidate.id === job.regionId);
+      if (!region) {
+        return job.status === 'queued'
+          ? 'Waiting to retouch this photo…'
+          : 'Retouching this photo…';
       }
-      const percent = this.retouchPercent();
-      if (percent === null) {
-        return 'Retouching this photo…';
-      }
-      return `Retouching this photo… ${percent}%`;
+      return this.retouchLine(region, false);
     }
     return 'Uploading to Immich…';
   }
@@ -387,23 +386,23 @@ export class EditorPage {
   }
 
   retouchBanner(region: Region): string {
-    if (region.retouch_status === 'queued') {
-      return 'Waiting to retouch this photo…';
-    }
-    if (region.retouch_progress === null) {
-      return 'Retouching this photo…';
-    }
-    return `Retouching this photo… ${region.retouch_progress}%`;
+    return this.retouchLine(region, false);
   }
 
   retouchButton(region: Region): string {
+    return this.retouchLine(region, true);
+  }
+
+  private retouchLine(region: Region, compact: boolean): string {
     if (region.retouch_status === 'queued') {
-      return 'Waiting…';
+      return compact ? 'Waiting…' : 'Waiting to retouch this photo…';
     }
     if (region.retouch_progress === null) {
-      return 'Retouching…';
+      return compact ? 'Retouching…' : 'Retouching this photo…';
     }
-    return `Retouching… ${region.retouch_progress}%`;
+    const name =
+      region.retouch_stage ?? (compact ? 'Retouching' : 'Retouching this photo');
+    return `${name}… ${region.retouch_progress}%`;
   }
 
   retouchingRegion(region: Region): boolean {
@@ -413,6 +412,7 @@ export class EditorPage {
   retouchChosen(region: Region): boolean {
     return (
       region.retouch_upscale ||
+      region.retouch_denoise ||
       region.retouch_faces ||
       region.retouch_colorize ||
       region.retouch_scratches
@@ -421,8 +421,10 @@ export class EditorPage {
 
   missingWeights(region: Region): string {
     const needed = new Set<string>();
-    if (region.retouch_upscale) {
+    if (region.retouch_denoise) {
       needed.add('upscale');
+    } else if (region.retouch_upscale) {
+      needed.add('scale');
     }
     if (region.retouch_faces) {
       needed.add('faces');
@@ -456,7 +458,12 @@ export class EditorPage {
   }
 
   setRetouch(
-    flag: 'retouch_upscale' | 'retouch_faces' | 'retouch_colorize' | 'retouch_scratches',
+    flag:
+      | 'retouch_upscale'
+      | 'retouch_denoise'
+      | 'retouch_faces'
+      | 'retouch_colorize'
+      | 'retouch_scratches',
     checked: boolean,
   ): void {
     const scan = this.scan();
@@ -473,7 +480,9 @@ export class EditorPage {
     const scan = this.scan();
     const region = this.selected();
     if (!scan || !region || !this.retouchChosen(region)) {
-      this.error.set('Choose upscale, face restoration, color, or scratches for this photo.');
+      this.error.set(
+        'Choose upscale, denoise, face restoration, color, or scratches for this photo.',
+      );
       return;
     }
     if (this.dirty()) {
@@ -483,6 +492,7 @@ export class EditorPage {
     this.run(
       this.api.retouch(scan.id, region.id, {
         upscale: region.retouch_upscale,
+        denoise: region.retouch_denoise,
         faces: region.retouch_faces,
         colorize: region.retouch_colorize,
         scratches: region.retouch_scratches,

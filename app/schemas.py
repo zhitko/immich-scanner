@@ -34,12 +34,14 @@ class RegionOut(BaseModel):
     crop_changed: bool
     needs_upload: bool
     retouch_upscale: bool
+    retouch_denoise: bool
     retouch_faces: bool
     retouch_colorize: bool
     retouch_scratches: bool
     upload_source: Literal["crop", "retouch"]
     retouch_status: str
     retouch_progress: int | None = None
+    retouch_stage: str | None = None
     retouch_error: str | None
     retouch_signature: str | None
     retouch_ready: bool
@@ -94,6 +96,7 @@ class RegionPatch(BaseModel):
     rating: int | None = Field(default=None, ge=1, le=5)
     visibility: Visibility | None = None
     retouch_upscale: bool | None = None
+    retouch_denoise: bool | None = None
     retouch_faces: bool | None = None
     retouch_colorize: bool | None = None
     retouch_scratches: bool | None = None
@@ -128,14 +131,18 @@ class UploadRequest(BaseModel):
 class RetouchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     upscale: bool = False
+    denoise: bool = False
     faces: bool = False
     colorize: bool = False
     scratches: bool = False
 
     @model_validator(mode="after")
     def _one_stage(self) -> "RetouchRequest":
-        if not any((self.upscale, self.faces, self.colorize, self.scratches)):
-            raise ValueError("Choose upscale, faces, color, or scratches.")
+        # Requests saved before denoise was its own field used upscale for both.
+        if "denoise" not in self.model_fields_set:
+            self.denoise = self.upscale
+        if not any((self.upscale, self.denoise, self.faces, self.colorize, self.scratches)):
+            raise ValueError("Choose upscale, denoise, faces, color, or scratches.")
         return self
 
 
@@ -200,6 +207,7 @@ class SettingsOut(BaseModel):
     width_mm: float | None
     height_mm: float | None
     retouch_upscale: bool
+    retouch_denoise: bool
     retouch_faces: bool
     retouch_colorize: bool
     retouch_scratches: bool
@@ -219,9 +227,16 @@ class SettingsUpdate(BaseModel):
     width_mm: float | None = Field(default=None, gt=0, le=400)
     height_mm: float | None = Field(default=None, gt=0, le=400)
     retouch_upscale: bool = False
+    retouch_denoise: bool = False
     retouch_faces: bool = False
     retouch_colorize: bool = False
     retouch_scratches: bool = False
+
+    @model_validator(mode="after")
+    def _legacy_denoise(self) -> "SettingsUpdate":
+        if "retouch_denoise" not in self.model_fields_set:
+            self.retouch_denoise = self.retouch_upscale
+        return self
 
     @field_validator("default_album_id")
     @classmethod
