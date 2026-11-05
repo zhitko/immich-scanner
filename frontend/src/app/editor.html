@@ -626,8 +626,11 @@
         </button>
         <div
           class="lightbox-stage"
-          (click)="$event.stopPropagation()"
-          (keydown)="$event.stopPropagation()"
+          role="group"
+          aria-label="Enlarged photo"
+          tabindex="-1"
+          (click)="keepLightboxOpen($event)"
+          (keydown)="keepLightboxOpen($event)"
         >
           <div
             class="lightbox-frame comparable"

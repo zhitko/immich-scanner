@@ -1351,6 +1351,9 @@ details.section[open] > summary {
   gap: 14px;
   max-width: 92vw;
 }
+.lightbox-stage:focus:not(:focus-visible) {
+  outline: none;
+}
 .lightbox-meta {
   margin: 0;
   color: rgba(255, 255, 255, 0.86);

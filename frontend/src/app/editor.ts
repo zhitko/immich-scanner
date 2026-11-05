@@ -838,6 +838,17 @@ export class EditorPage {
     this.previewOpen.set(false);
   }
 
+  /**
+   * Clicks on the enlarged photo must not dismiss the dialog. Escape is left
+   * to bubble so the dialog's own handler still closes it.
+   */
+  keepLightboxOpen(event: Event): void {
+    if (event instanceof KeyboardEvent && event.key === 'Escape') {
+      return;
+    }
+    event.stopPropagation();
+  }
+
   rotate(clockwise: boolean): void {
     const scan = this.scan();
     const region = this.selected();
