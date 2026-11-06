@@ -1049,6 +1049,8 @@ def test_new_photos_start_with_the_saved_steps(client, app_bundle) -> None:
             "default_album_id": "",
             "retouch_upscale": True,
             "retouch_colorize": True,
+            "retouch_color_balance": True,
+            "retouch_contrast": True,
         },
     )
     assert saved.status_code == 200
@@ -1056,6 +1058,8 @@ def test_new_photos_start_with_the_saved_steps(client, app_bundle) -> None:
     assert saved.json()["retouch_denoise"] is True
     assert saved.json()["retouch_faces"] is False
     assert saved.json()["retouch_scratches"] is False
+    assert saved.json()["retouch_color_balance"] is True
+    assert saved.json()["retouch_contrast"] is True
 
     app, services = app_bundle
     scan_id = _import_bed(services, encode_png(make_bed()))
@@ -1064,6 +1068,8 @@ def test_new_photos_start_with_the_saved_steps(client, app_bundle) -> None:
     assert detected["retouch_upscale"] is True
     assert detected["retouch_denoise"] is True
     assert detected["retouch_colorize"] is True
+    assert detected["retouch_color_balance"] is True
+    assert detected["retouch_contrast"] is True
     assert detected["retouch_faces"] is False
 
     added = client.post(
@@ -1073,6 +1079,28 @@ def test_new_photos_start_with_the_saved_steps(client, app_bundle) -> None:
     assert added.status_code == 201
     assert added.json()["retouch_upscale"] is True
     assert added.json()["retouch_scratches"] is False
+
+
+def test_levels_only_retouch_and_option_changes_invalidate_result(client, app_bundle) -> None:
+    app, services = app_bundle
+    scan_id = _import_bed(services, encode_png(make_bed()))
+    assert app.state.worker.process_available() == 1
+    region = client.get(f"/api/scans/{scan_id}").json()["regions"][0]
+    url = f"/api/scans/{scan_id}/regions/{region['id']}"
+    queued = client.post(url + "/retouch", json={"color_balance": True, "contrast": True})
+    assert queued.status_code == 202
+    assert app.state.worker.process_available() == 1
+    region = client.get(f"/api/scans/{scan_id}").json()["regions"][0]
+    assert region["retouch_ready"] is True
+    assert region["retouch_color_balance"] is True
+    assert region["retouch_contrast"] is True
+    assert client.patch(url, json={"upload_source": "retouch"}).status_code == 200
+    changed = client.patch(url, json={"retouch_contrast": False})
+    assert changed.status_code == 200
+    assert changed.json()["retouch_status"] == "stale"
+    assert changed.json()["upload_source"] == "crop"
+    restored = client.patch(url, json={"retouch_contrast": True})
+    assert restored.json()["retouch_ready"] is True
 
 
 def test_retouch_keeps_the_crop_and_upload_uses_it_only_when_chosen(client, app_bundle) -> None:
@@ -1300,7 +1328,7 @@ def test_scale_denoise_both_and_neither_keep_their_dimensions(client, app_bundle
     )
     assert denoised["retouch_denoise"] is True
     assert denoised["retouch_upscale"] is False
-    assert denoised["retouch_signature"].endswith("u0d1f0c0s0")
+    assert denoised["retouch_signature"].endswith("u0d1f0c0s0b0t0")
     _assert_derivative(services, scan_id, denoised, scale=1, color=(0, 0, 255))
 
     scaled = finish(
@@ -1313,7 +1341,7 @@ def test_scale_denoise_both_and_neither_keep_their_dimensions(client, app_bundle
         }
     )
     assert scaled["retouch_denoise"] is False
-    assert scaled["retouch_signature"].endswith("u1d0f0c0s0")
+    assert scaled["retouch_signature"].endswith("u1d0f0c0s0b0t0")
     _assert_derivative(services, scan_id, scaled, scale=2, color=(255, 0, 0))
 
     both = finish(
@@ -1325,7 +1353,7 @@ def test_scale_denoise_both_and_neither_keep_their_dimensions(client, app_bundle
             "scratches": False,
         }
     )
-    assert both["retouch_signature"].endswith("u1d1f0c0s0")
+    assert both["retouch_signature"].endswith("u1d1f0c0s0b0t0")
     _assert_derivative(services, scan_id, both, scale=2, color=(255, 0, 0))
 
     stale = client.patch(

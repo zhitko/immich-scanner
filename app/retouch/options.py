@@ -6,7 +6,7 @@ from app.models import Region
 
 # The denoise bit is optional. A saved token without it is the old combined
 # "upscale and denoise" step, so that bit follows the upscale bit.
-_TOKEN = re.compile(r"u([01])(?:d([01]))?f([01])c([01])s([01])$")
+_TOKEN = re.compile(r"u([01])(?:d([01]))?f([01])c([01])s([01])(?:b([01])t([01]))?$")
 _RETOUCH_MARKER = "|retouch|"
 
 
@@ -17,9 +17,21 @@ class RetouchOptions:
     faces: bool = False
     colorize: bool = False
     scratches: bool = False
+    color_balance: bool = False
+    contrast: bool = False
 
     def any_selected(self) -> bool:
-        return self.upscale or self.denoise or self.faces or self.colorize or self.scratches
+        return any(
+            (
+                self.upscale,
+                self.denoise,
+                self.faces,
+                self.colorize,
+                self.scratches,
+                self.color_balance,
+                self.contrast,
+            )
+        )
 
 
 def options_from_region(region: Region) -> RetouchOptions:
@@ -29,6 +41,8 @@ def options_from_region(region: Region) -> RetouchOptions:
         faces=bool(region.retouch_faces),
         colorize=bool(region.retouch_colorize),
         scratches=bool(region.retouch_scratches),
+        color_balance=bool(region.retouch_color_balance),
+        contrast=bool(region.retouch_contrast),
     )
 
 
@@ -39,6 +53,8 @@ def option_token(options: RetouchOptions) -> str:
         f"f{int(options.faces)}"
         f"c{int(options.colorize)}"
         f"s{int(options.scratches)}"
+        f"b{int(options.color_balance)}"
+        f"t{int(options.contrast)}"
     )
 
 
@@ -54,6 +70,8 @@ def options_from_token(token: str) -> RetouchOptions | None:
         faces=match.group(3) == "1",
         colorize=match.group(4) == "1",
         scratches=match.group(5) == "1",
+        color_balance=match.group(6) == "1",
+        contrast=match.group(7) == "1",
     )
 
 

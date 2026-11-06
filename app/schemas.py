@@ -38,6 +38,8 @@ class RegionOut(BaseModel):
     retouch_faces: bool
     retouch_colorize: bool
     retouch_scratches: bool
+    retouch_color_balance: bool
+    retouch_contrast: bool
     upload_source: Literal["crop", "retouch"]
     retouch_status: str
     retouch_progress: int | None = None
@@ -100,6 +102,8 @@ class RegionPatch(BaseModel):
     retouch_faces: bool | None = None
     retouch_colorize: bool | None = None
     retouch_scratches: bool | None = None
+    retouch_color_balance: bool | None = None
+    retouch_contrast: bool | None = None
     upload_source: Literal["crop", "retouch"] | None = None
 
     @field_validator("album_id")
@@ -135,14 +139,26 @@ class RetouchRequest(BaseModel):
     faces: bool = False
     colorize: bool = False
     scratches: bool = False
+    color_balance: bool = False
+    contrast: bool = False
 
     @model_validator(mode="after")
     def _one_stage(self) -> "RetouchRequest":
         # Requests saved before denoise was its own field used upscale for both.
         if "denoise" not in self.model_fields_set:
             self.denoise = self.upscale
-        if not any((self.upscale, self.denoise, self.faces, self.colorize, self.scratches)):
-            raise ValueError("Choose upscale, denoise, faces, color, or scratches.")
+        if not any(
+            (
+                self.upscale,
+                self.denoise,
+                self.faces,
+                self.colorize,
+                self.scratches,
+                self.color_balance,
+                self.contrast,
+            )
+        ):
+            raise ValueError("Choose at least one retouch stage.")
         return self
 
 
@@ -211,6 +227,8 @@ class SettingsOut(BaseModel):
     retouch_faces: bool
     retouch_colorize: bool
     retouch_scratches: bool
+    retouch_color_balance: bool
+    retouch_contrast: bool
 
 
 class SettingsUpdate(BaseModel):
@@ -231,6 +249,8 @@ class SettingsUpdate(BaseModel):
     retouch_faces: bool = False
     retouch_colorize: bool = False
     retouch_scratches: bool = False
+    retouch_color_balance: bool = False
+    retouch_contrast: bool = False
 
     @model_validator(mode="after")
     def _legacy_denoise(self) -> "SettingsUpdate":

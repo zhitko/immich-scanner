@@ -24,6 +24,7 @@ from app.retouch.imageops import (
     unit_to_rgb,
     warp_face,
 )
+from app.retouch.levels import correct_color_cast, restore_contrast
 from app.retouch.options import RetouchOptions
 from app.retouch.scratch import scratch_regions
 from app.retouch.session import open_session
@@ -77,7 +78,7 @@ class OnnxRetoucher:
     ) -> np.ndarray:
         self._require(options)
         budget = self._budget(image, options, on_progress)
-        # Scratches and color run on the crop. Scale and denoise are one
+        # Scratches, levels and color run on the crop. Scale and denoise are one
         # Real-ESRGAN pass after that: both networks emit 4×, so a second pass
         # would enlarge twice. Faces run last and see the image that will be saved.
         result = image
@@ -100,6 +101,16 @@ class OnnxRetoucher:
             # After the fill. Evened first, the hole's edge reads as a line and the fill redraws it.
             if folds:
                 result = even_fold_shading(result, folds, mask)
+        if options.color_balance:
+            _announce(on_stage, "Correcting color cast")
+            result = correct_color_cast(result)
+            if budget is not None:
+                budget.add(1)
+        if options.contrast:
+            _announce(on_stage, "Restoring contrast")
+            result = restore_contrast(result)
+            if budget is not None:
+                budget.add(1)
         if options.colorize:
             _announce(on_stage, "Colorizing")
             result = self._colorize(result)
@@ -138,6 +149,7 @@ class OnnxRetoucher:
         face_estimate = 0
         if options.scratches:
             total += _MASK_UNITS
+        total += int(options.color_balance) + int(options.contrast)
         if options.colorize:
             total += _COLOR_UNITS
         plan = restoration_for(upscale=options.upscale, denoise=options.denoise)

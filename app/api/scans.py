@@ -50,6 +50,8 @@ _RETOUCH_FIELDS = {
     "retouch_faces",
     "retouch_colorize",
     "retouch_scratches",
+    "retouch_color_balance",
+    "retouch_contrast",
 }
 
 
@@ -269,6 +271,8 @@ def retouch_region(
     region.retouch_faces = body.faces
     region.retouch_colorize = body.colorize
     region.retouch_scratches = body.scratches
+    region.retouch_color_balance = body.color_balance
+    region.retouch_contrast = body.contrast
     region.updated_at = utcnow()
     job = enqueue_job(
         session,
@@ -360,6 +364,8 @@ def _apply_patch(scan: Scan, region: Region, body: RegionPatch) -> None:
         "retouch_faces",
         "retouch_colorize",
         "retouch_scratches",
+        "retouch_color_balance",
+        "retouch_contrast",
     ):
         if name in fields and getattr(body, name) is not None:
             setattr(region, name, getattr(body, name))

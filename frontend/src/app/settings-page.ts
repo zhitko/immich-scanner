@@ -102,7 +102,9 @@ export class SettingsPage {
       | 'retouch_denoise'
       | 'retouch_faces'
       | 'retouch_colorize'
-      | 'retouch_scratches',
+      | 'retouch_scratches'
+      | 'retouch_color_balance'
+      | 'retouch_contrast',
     checked: boolean,
   ): void {
     this.update(key, checked);

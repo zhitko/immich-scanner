@@ -29,6 +29,8 @@ export interface Region {
   retouch_faces: boolean;
   retouch_colorize: boolean;
   retouch_scratches: boolean;
+  retouch_color_balance: boolean;
+  retouch_contrast: boolean;
   upload_source: 'crop' | 'retouch';
   retouch_status: string;
   retouch_progress: number | null;
@@ -91,6 +93,8 @@ export interface Settings {
   retouch_faces: boolean;
   retouch_colorize: boolean;
   retouch_scratches: boolean;
+  retouch_color_balance: boolean;
+  retouch_contrast: boolean;
 }
 
 export interface ScannerDevice {
@@ -160,6 +164,8 @@ export interface RetouchChoice {
   faces: boolean;
   colorize: boolean;
   scratches: boolean;
+  color_balance: boolean;
+  contrast: boolean;
 }
 
 export interface RetouchPatch {
@@ -168,6 +174,8 @@ export interface RetouchPatch {
   retouch_faces?: boolean;
   retouch_colorize?: boolean;
   retouch_scratches?: boolean;
+  retouch_color_balance?: boolean;
+  retouch_contrast?: boolean;
   upload_source?: 'crop' | 'retouch';
 }
 

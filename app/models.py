@@ -62,6 +62,8 @@ class Region(Base):
     retouch_faces: Mapped[bool] = mapped_column(Boolean, default=False)
     retouch_colorize: Mapped[bool] = mapped_column(Boolean, default=False)
     retouch_scratches: Mapped[bool] = mapped_column(Boolean, default=False)
+    retouch_color_balance: Mapped[bool] = mapped_column(Boolean, default=False)
+    retouch_contrast: Mapped[bool] = mapped_column(Boolean, default=False)
     upload_source: Mapped[str] = mapped_column(String(16), default="crop")
     retouch_status: Mapped[str] = mapped_column(String(16), default="none")
     retouch_error: Mapped[str | None] = mapped_column(Text, nullable=True)

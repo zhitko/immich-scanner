@@ -57,6 +57,8 @@ def region_out(region: Region) -> RegionOut:
         retouch_faces=bool(region.retouch_faces),
         retouch_colorize=bool(region.retouch_colorize),
         retouch_scratches=bool(region.retouch_scratches),
+        retouch_color_balance=bool(region.retouch_color_balance),
+        retouch_contrast=bool(region.retouch_contrast),
         upload_source=region.upload_source or "crop",
         retouch_status=status,
         retouch_progress=retouch_progress(region.id) if status == "running" else None,

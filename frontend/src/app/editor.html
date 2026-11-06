@@ -366,6 +366,29 @@
                   <label class="check">
                     <input
                       type="checkbox"
+                      [checked]="region.retouch_color_balance"
+                      (change)="setRetouch('retouch_color_balance', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
+                    Correct color cast
+                  </label>
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [checked]="region.retouch_contrast"
+                      (change)="setRetouch('retouch_contrast', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
+                    Restore contrast
+                  </label>
+                  <p class="muted small">
+                    Correct color cast balances faded red or yellow prints. Restore contrast
+                    deepens washed-out blacks and restores highlights, including in black-and-white
+                    photos. Both run before colorization and need no model download.
+                  </p>
+                  <label class="check">
+                    <input
+                      type="checkbox"
                       [checked]="region.retouch_colorize"
                       (change)="setRetouch('retouch_colorize', $any($event.target).checked)"
                       [disabled]="busy() || retouchingRegion(region)"

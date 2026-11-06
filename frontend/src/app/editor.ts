@@ -415,7 +415,9 @@ export class EditorPage {
       region.retouch_denoise ||
       region.retouch_faces ||
       region.retouch_colorize ||
-      region.retouch_scratches
+      region.retouch_scratches ||
+      region.retouch_color_balance ||
+      region.retouch_contrast
     );
   }
 
@@ -463,7 +465,9 @@ export class EditorPage {
       | 'retouch_denoise'
       | 'retouch_faces'
       | 'retouch_colorize'
-      | 'retouch_scratches',
+      | 'retouch_scratches'
+      | 'retouch_color_balance'
+      | 'retouch_contrast',
     checked: boolean,
   ): void {
     const scan = this.scan();
@@ -481,7 +485,7 @@ export class EditorPage {
     const region = this.selected();
     if (!scan || !region || !this.retouchChosen(region)) {
       this.error.set(
-        'Choose upscale, denoise, face restoration, color, or scratches for this photo.',
+        'Choose at least one retouch stage for this photo.',
       );
       return;
     }
@@ -496,6 +500,8 @@ export class EditorPage {
         faces: region.retouch_faces,
         colorize: region.retouch_colorize,
         scratches: region.retouch_scratches,
+        color_balance: region.retouch_color_balance,
+        contrast: region.retouch_contrast,
       }),
       (result) => {
         this.replaceRegion(result.region, true);

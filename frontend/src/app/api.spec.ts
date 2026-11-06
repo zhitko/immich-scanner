@@ -26,6 +26,8 @@ describe('ArchiveApi', () => {
     retouch_faces: false,
     retouch_colorize: false,
     retouch_scratches: false,
+    retouch_color_balance: false,
+    retouch_contrast: false,
   };
 
   beforeEach(() => {
@@ -94,6 +96,8 @@ describe('ArchiveApi', () => {
         faces: false,
         colorize: false,
         scratches: false,
+        color_balance: true,
+        contrast: true,
       })
       .subscribe((body) => expect(body.job_id).toBe('job-9'));
     const request = http.expectOne('/api/scans/scan-1/regions/region-1/retouch');
@@ -104,6 +108,8 @@ describe('ArchiveApi', () => {
       faces: false,
       colorize: false,
       scratches: false,
+      color_balance: true,
+      contrast: true,
     });
     request.flush({ job_id: 'job-9', region: {} });
   });

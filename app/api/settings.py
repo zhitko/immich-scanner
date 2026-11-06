@@ -82,6 +82,8 @@ def _archive(body: SettingsUpdate) -> ArchiveSettings:
         retouch_faces=body.retouch_faces,
         retouch_colorize=body.retouch_colorize,
         retouch_scratches=body.retouch_scratches,
+        retouch_color_balance=body.retouch_color_balance,
+        retouch_contrast=body.retouch_contrast,
     )
 
 
@@ -103,4 +105,6 @@ def _out(settings: ArchiveSettings) -> SettingsOut:
         retouch_faces=settings.retouch_faces,
         retouch_colorize=settings.retouch_colorize,
         retouch_scratches=settings.retouch_scratches,
+        retouch_color_balance=settings.retouch_color_balance,
+        retouch_contrast=settings.retouch_contrast,
     )

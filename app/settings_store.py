@@ -29,6 +29,8 @@ class ArchiveSettings:
     retouch_faces: bool = False
     retouch_colorize: bool = False
     retouch_scratches: bool = False
+    retouch_color_balance: bool = False
+    retouch_contrast: bool = False
 
 
 def load_settings(session: Session) -> ArchiveSettings:
@@ -67,6 +69,8 @@ def load_settings(session: Session) -> ArchiveSettings:
         retouch_faces=_flag(stored.get("retouch_faces")),
         retouch_colorize=_flag(stored.get("retouch_colorize")),
         retouch_scratches=_flag(stored.get("retouch_scratches")),
+        retouch_color_balance=_flag(stored.get("retouch_color_balance")),
+        retouch_contrast=_flag(stored.get("retouch_contrast")),
     )
 
 
@@ -88,6 +92,8 @@ def save_settings(session: Session, settings: ArchiveSettings) -> None:
         "retouch_faces": _format_flag(settings.retouch_faces),
         "retouch_colorize": _format_flag(settings.retouch_colorize),
         "retouch_scratches": _format_flag(settings.retouch_scratches),
+        "retouch_color_balance": _format_flag(settings.retouch_color_balance),
+        "retouch_contrast": _format_flag(settings.retouch_contrast),
     }
     for key, value in values.items():
         row = session.get(Setting, key)
@@ -122,6 +128,8 @@ def seed_settings(session: Session, process: Settings) -> None:
         retouch_faces=current.retouch_faces,
         retouch_colorize=current.retouch_colorize,
         retouch_scratches=current.retouch_scratches,
+        retouch_color_balance=current.retouch_color_balance,
+        retouch_contrast=current.retouch_contrast,
     )
     if seeded != current or not session.get(Setting, "output_format"):
         save_settings(session, seeded)
@@ -156,6 +164,8 @@ def retouch_columns(settings: ArchiveSettings) -> dict[str, bool]:
         "retouch_faces": settings.retouch_faces,
         "retouch_colorize": settings.retouch_colorize,
         "retouch_scratches": settings.retouch_scratches,
+        "retouch_color_balance": settings.retouch_color_balance,
+        "retouch_contrast": settings.retouch_contrast,
     }
 
 

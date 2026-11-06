@@ -97,7 +97,19 @@ Retouch is optional and runs on one photo at a time, after the crop is fixed and
 
 Retouch runs on the same single worker as detection and upload, so a slow retouch on the CPU holds up the jobs queued behind it. Upscaling stitches one row of tiles at a time, but the 4× result itself is held in memory: a 3000×2000 crop becomes a 12000×8000 image of about 290 MB. Denoise alone builds that enlargement and then resizes it back, so the saved file stays the crop size. The 4× image is still in memory during the pass.
 
-The stages that are switched on run in this order:
+The stages that are switched on run in this order: scratch repair, color-cast correction,
+contrast restoration, colorization, upscale/denoise, then face restoration.
+
+**Correct color cast** balances the RGB black and white levels of faded color prints,
+such as photos that have turned red or yellow. **Restore contrast** expands washed-out
+black and white levels, including in black-and-white photos. Both are optional, need no
+model download, and can be selected per photo or as defaults under Settings → Processing.
+For a red print, start with color-cast correction; for a pale black-and-white print,
+start with contrast restoration. Enable both when needed and compare the Retouched preview.
+Color balancing assumes some neutral dark/light content, so intentionally warm scenes may
+need it left off. These corrections cannot recover color information completely lost to fading.
+
+The model-based stages are:
 
 - Fill scratches with LaMa. The mask follows light or dark strokes, including faint sustained lines, wider scratches, and creases that fade along their length. Directional detection follows diagonal cracks through grain and extends confirmed strokes into faint tails. Faint and wide candidates must pass stricter length and shape checks; faint candidates in textured areas also need substantial overlap with an accepted scratch. On a fold it targets the cracks and the tear's shoulder rather than the whole band. LaMa runs at full resolution on the 512×512 tiles that hold a scratch, and overlapping tiles are cross-faded. Detected pixels take the full repair; a small extra margin provides blending without mixing the original scratch back in. After the fill, the shadow a fold leaves along its length is lifted, and the step in brightness between its two sides eases into a gradient; the levels further from the fold stay as scanned. Automatic detection can still miss damage or mistake image details for scratches, so review the retouch preview.
 - Colorize with DDColor. Lightness stays from the scan. A high-key or flat scan is given a fixed tone curve on the model input only; without that, this export stays gray and a few of its pixels resize into colored dots.

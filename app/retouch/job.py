@@ -32,7 +32,7 @@ def handle_retouch(session: Session, job: Job, services: Services) -> None:
         raise RuntimeError("scan file is not available")
     options = options_from_region(region)
     if not options.any_selected():
-        raise RuntimeError("Choose upscale, denoise, faces, color, or scratches.")
+        raise RuntimeError("Choose at least one retouch stage.")
     produced = f"{geometry_signature(region)}|{option_token(options)}"
     center_x = region.center_x
     center_y = region.center_y
