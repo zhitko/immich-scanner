@@ -87,7 +87,7 @@ def geometry_signature(region: Region) -> str:
 
 
 def expected_retouch_signature(region: Region) -> str:
-    revision = "|scratch-v2" if region.retouch_scratches else ""
+    revision = "|scratch-v4" if region.retouch_scratches else ""
     return f"{geometry_signature(region)}{revision}|{option_token(options_from_region(region))}"
 
 
@@ -139,8 +139,8 @@ def retouch_matches(region: Region) -> bool:
         return False
     if region.retouch_signature == expected_retouch_signature(region):
         return True
-    # Old geometric masks can erase intact fabric. They must be regenerated
-    # with the learned detector, even when the selected switches still match.
+    # Earlier masks either erased fabric or left crease edges unfilled. They
+    # need regeneration even when the selected switches still match.
     if region.retouch_scratches:
         return False
     # A derivative from before denoise was its own bit stays current when the

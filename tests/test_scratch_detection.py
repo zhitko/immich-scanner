@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from app.retouch.catalog import CATALOG, specs_for
-from app.retouch.detection import learned_scratch_mask, scratch_probabilities
+from app.retouch.detection import learned_scratch_mask, repair_mask, scratch_probabilities
 from app.retouch.engine import MissingWeights, OnnxRetoucher
 from app.retouch.options import RetouchOptions, expected_retouch_signature, retouch_matches
 
@@ -16,10 +16,11 @@ class Detector:
     def run(self, _outputs, feeds):
         tensor = feeds["input"]
         assert tensor.dtype == np.float32
-        assert tensor.shape == (1, 1, 256, 512)
+        assert tensor.shape in ((1, 1, 256, 512), (1, 1, 512, 1024))
         assert tensor.min() == -1 and tensor.max() == 1
         result = np.full_like(tensor, 0.6)
-        result[:, :, 80:180, 120:125] = 0.95
+        scale = tensor.shape[2] // 256
+        result[:, :, 80 * scale : 180 * scale, 120 * scale : 125 * scale] = 0.95
         return [result]
 
 
@@ -94,8 +95,11 @@ def test_old_scratch_derivatives_are_stale_but_new_results_are_current():
         retouch_path="retouch/example.png",
     )
     current = expected_retouch_signature(region)
-    region.retouch_signature = current.replace("|scratch-v2", "")
+    region.retouch_signature = current.replace("|scratch-v4", "")
     assert not retouch_matches(region)
+    for revision in ("scratch-v2", "scratch-v3"):
+        region.retouch_signature = current.replace("scratch-v4", revision)
+        assert not retouch_matches(region)
     region.retouch_signature = current
     assert retouch_matches(region)
 
@@ -107,7 +111,8 @@ def test_accepted_damage_reaches_lama_with_progress_and_stage_updates(tmp_path, 
     class Damage(Detector):
         def run(self, _outputs, feeds):
             result = np.zeros_like(feeds["input"])
-            result[:, :, 80:180, 120:125] = 0.95
+            scale = result.shape[2] // 256
+            result[:, :, 80 * scale : 180 * scale, 120 * scale : 125 * scale] = 0.95
             return [result]
 
     class Lama:
@@ -133,3 +138,59 @@ def test_accepted_damage_reaches_lama_with_progress_and_stage_updates(tmp_path, 
     assert progress == sorted(set(progress))
     assert progress[-1] == 99
     assert stages == ["Detecting scratches", "Filling scratches"]
+
+
+def test_repair_mask_covers_crease_edges_but_not_disconnected_weak_texture():
+    probabilities = np.zeros((1024, 1024), dtype=np.float32)
+    probabilities[500:503, 100:900] = 0.95
+    probabilities[495:510, 100:900] = np.maximum(probabilities[495:510, 100:900], 0.3)
+    probabilities[600:620, 100:900] = 0.6
+    mask = repair_mask(probabilities)
+    assert mask[495:510, 100:900].all()
+    assert not mask[600:620].any()
+    assert not mask[:490].any()
+    assert not mask[515:].any()
+
+
+def test_repair_mask_cannot_flood_connected_uncertain_fabric():
+    probabilities = np.full((1024, 1024), 0.6, dtype=np.float32)
+    assert not repair_mask(probabilities).any()
+    probabilities[500:503, 500:503] = 0.95
+    mask = repair_mask(probabilities)
+    assert mask[500:503, 500:503].all()
+    assert not mask[:490].any()
+    assert not mask[513:].any()
+    assert not mask[:, :490].any()
+    assert not mask[:, 513:].any()
+
+
+def test_second_scale_rejects_necklace_but_keeps_confirmed_crease_edges():
+    coarse = np.zeros((1024, 1024), dtype=np.float32)
+    coarse[100:900, 100:110] = 0.95  # Necklace mistaken for a scratch.
+    coarse[495:510, 300:900] = 0.3
+    coarse[500:503, 300:900] = 0.95  # Real crease, with uncertain edges.
+    detail = np.zeros_like(coarse)
+    detail[500:503, 300:800] = 0.95  # Some scale-dependent gaps are expected.
+    detail[100:900, 100:110] = 0.1
+    detail[100:900, 950:960] = 0.95  # Fine-scale-only texture cannot seed a repair.
+    mask = repair_mask(coarse, confirmation=detail)
+    assert not mask[:, :200].any()
+    assert mask[495:510, 300:900].all()
+    assert not mask[:, 940:].any()
+
+
+def test_detector_requires_confirmation_before_repairing_a_bright_strand():
+    shapes = []
+
+    class Necklace(Detector):
+        def run(self, _outputs, feeds):
+            tensor = feeds["input"]
+            shapes.append(tensor.shape)
+            result = np.zeros_like(tensor)
+            if tensor.shape[2] == 256:
+                result[:, :, 80:250, 120:125] = 0.99
+            return [result]
+
+    image = np.zeros((512, 1024, 3), np.uint8)
+    assert not learned_scratch_mask(Necklace(), image).any()
+    assert shapes == [(1, 1, 256, 512), (1, 1, 512, 1024)]
