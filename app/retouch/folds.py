@@ -29,6 +29,13 @@ def even_fold_shading(image: np.ndarray, folds: list[Fold], mask: np.ndarray) ->
     for fold in folds:
         if fold.along.size < 2:
             continue
+        # Shading correction reaches this far on both sides of the crack.
+        # A shorter segment has too little along-fold context to distinguish
+        # paper shading from an object edge (for example, a gap in a tree).
+        # Its cracks still receive the inpainted repair.
+        reach = max(8, int(round(fold.radius * _SPREAD))) * _STEP_REACH
+        if fold.along.size < 2 * reach:
+            continue
         result = _even(result, fold, mask)
     return result
 

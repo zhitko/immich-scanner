@@ -10,6 +10,7 @@ _WIDE = 0.0055
 _MIN_LENGTH = 0.012
 _STRONG = 40
 _HAIRLINE = 24
+_FAINT = 14
 _BRIDGE = 16
 # Gray levels a band pixel must differ from the picture continued across the band.
 _DEVIATION = 16
@@ -35,8 +36,8 @@ def scratch_mask(image: np.ndarray) -> np.ndarray:
 def scratch_regions(image: np.ndarray) -> tuple[np.ndarray, list[Fold]]:
     """Light or dark strokes, including a crease that fades along its length.
 
-    Filled areas are left alone. A fold is covered as one band, including the
-    stretch where it crosses pale paper and the stroke itself is hard to see.
+    Filled areas are left alone. A fold's search band includes the stretch
+    where it crosses pale paper and the stroke itself is hard to see.
     A tear's shoulder is included, so the fill cannot copy the rest of the tear
     back in. A hairline on flat paper stays narrow.
     """
@@ -48,9 +49,15 @@ def scratch_regions(image: np.ndarray) -> tuple[np.ndarray, list[Fold]]:
     wide = _odd(max(thickness + 6, short * _WIDE))
     min_length = max(24, int(round(short * _MIN_LENGTH)))
     fine = _line_response(gray, thickness)
+    broad = _line_response(gray, wide)
     seeds = _strokes(fine, _STRONG, thickness * 0.8, min_length)
     seeds |= _strokes(fine, _HAIRLINE, 2.2, min_length)
-    bridged = _bridge(seeds, _line_response(gray, wide), search=max(14, thickness + 6))
+    # A scratch wider than the fine kernel has no fine response at all.
+    seeds |= _strokes(broad, _STRONG, wide * 0.8, max(72, min_length * 3), aspect=8)
+    # Low contrast alone is not enough: faint marks must be thin and sustained.
+    # This keeps grain and short details from becoming new scratch seeds.
+    seeds |= _strokes(fine, _FAINT, 3.2, max(72, min_length * 3), aspect=8)
+    bridged = _bridge(seeds, broad, search=max(14, thickness + 6))
     radius = max(12, int(round(short * 0.013)))
     min_span = max(80, int(round(short * 0.02)))
     widened, folds = _widen_creases(bridged, radius=radius, min_span=min_span)
@@ -61,7 +68,58 @@ def scratch_regions(image: np.ndarray) -> tuple[np.ndarray, list[Fold]]:
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     band = cv2.dilate(covered.astype(np.uint8), kernel).astype(bool)
     reach = max(6, int(round(short * 0.006)))
-    return _tighten(gray, band, strokes, reach=reach, min_span=min_span), folds
+    tight = _tighten(gray, band, strokes, reach=reach, min_span=min_span)
+    continuous = _directional_strokes(gray, tight)
+    tight |= cv2.dilate(continuous.astype(np.uint8), _kernel(5)).astype(bool)
+    return tight, folds
+
+
+def _directional_strokes(gray: np.ndarray, seeds: np.ndarray) -> np.ndarray:
+    """Recover faint crease segments without joining them to surrounding grain.
+
+    Light and dark responses stay separate. Short directional openings remove
+    crossing texture before measuring the length and shape of each component.
+    In textured areas a component must overlap an already accepted scratch;
+    isolated faint strokes are accepted only in relatively quiet surroundings.
+    """
+
+    smooth = cv2.GaussianBlur(gray, (3, 3), 0)
+    found = np.zeros(gray.shape, dtype=bool)
+    kernels = []
+    for angle in range(0, 180, 15):
+        line = np.zeros((17, 17), dtype=np.uint8)
+        dx = int(round(8 * np.cos(np.deg2rad(angle))))
+        dy = int(round(8 * np.sin(np.deg2rad(angle))))
+        cv2.line(line, (8 - dx, 8 - dy), (8 + dx, 8 + dy), 1)
+        kernels.append(line)
+    responses = []
+    for kind in (cv2.MORPH_TOPHAT, cv2.MORPH_BLACKHAT):
+        response = np.maximum(
+            cv2.morphologyEx(smooth, kind, np.ones((1, 15), np.uint8)),
+            cv2.morphologyEx(smooth, kind, np.ones((15, 1), np.uint8)),
+        )
+        responses.append(response)
+    for level in (5, 3):
+        # The lower threshold can extend a confirmed direction, not start one.
+        anchors = seeds if level == 5 else found.copy()
+        for response in responses:
+            weak = (response >= level).astype(np.uint8)
+            coherent = np.zeros_like(weak)
+            for line in kernels:
+                coherent |= cv2.morphologyEx(weak, cv2.MORPH_OPEN, line)
+            accepted = _strokes(coherent * 255, 1, 8, 50, aspect=5)
+            count, labels = cv2.connectedComponents(accepted.astype(np.uint8))
+            hits = np.bincount(labels[anchors], minlength=count)
+            sizes = np.bincount(labels.ravel(), minlength=count)
+            keep = (hits >= 12) & (hits >= sizes * 0.1)
+            keep[0] = False
+            found |= keep[labels]
+            if level == 5:
+                density = cv2.boxFilter(weak.astype(np.float32), -1, (31, 31))
+                coherent[density > 0.25] = 0
+                coherent = cv2.dilate(coherent, np.ones((3, 3), np.uint8)) & weak
+                found |= _strokes(coherent * 255, 1, 8, 50, aspect=5)
+    return found
 
 
 def _tighten(
@@ -92,6 +150,10 @@ def _tighten(
     count, labels, stats, _centroids = cv2.connectedComponentsWithStats(tight, connectivity=8)
     keep = np.zeros(count, dtype=bool)
     keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= _SPECK
+    # A validated 24–39 pixel hairline is smaller than the speck cutoff.
+    # Remove isolated crack noise, but do not discard an accepted stroke.
+    keep[np.unique(labels[strokes])] = True
+    keep[0] = False
     tight = keep[labels].astype(np.uint8)
     return cv2.dilate(tight, _kernel(5)).astype(bool) & band
 
@@ -159,6 +221,8 @@ def _strokes(
     level: int,
     max_radius: float,
     min_length: int,
+    *,
+    aspect: float = 3,
 ) -> np.ndarray:
     strokes = np.where(response >= level, 255, 0).astype(np.uint8)
     if not strokes.any():
@@ -178,13 +242,13 @@ def _strokes(
         radius = distance[y : y + h, x : x + w][selected]
         if float(radius.max()) > max_radius:
             continue
-        if not _elongated(selected, min_length):
+        if not _elongated(selected, min_length, aspect=aspect):
             continue
         kept[y : y + h, x : x + w][selected] = True
     return kept
 
 
-def _elongated(selected: np.ndarray, min_length: int) -> bool:
+def _elongated(selected: np.ndarray, min_length: int, *, aspect: float = 3) -> bool:
     """A stroke is long along one axis. A loop or a filled patch is not."""
 
     ys, xs = np.where(selected)
@@ -197,7 +261,7 @@ def _elongated(selected: np.ndarray, min_length: int) -> bool:
     major = float(np.sqrt(max(float(variance[1]), 0.0)))
     if major * np.sqrt(12) < min_length:
         return False
-    return major >= minor * 3
+    return major >= minor * aspect
 
 
 def _attach_fragments(seeds: np.ndarray, response: np.ndarray) -> np.ndarray:

@@ -89,7 +89,7 @@ class OnnxRetoucher:
             if mask.any():
                 tile_h, tile_w = self._lama_tile()
                 if budget is not None:
-                    extra = masked_tile_count(mask, tile_h, tile_w, _LAMA_OVERLAP)
+                    extra = masked_tile_count(_inpaint_mask(mask), tile_h, tile_w, _LAMA_OVERLAP)
                     if extra:
                         budget.resize(budget.total + extra)
                 result = self._inpaint(
@@ -252,16 +252,21 @@ class OnnxRetoucher:
     ) -> np.ndarray:
         session = self._session(CATALOG["inpaint"])
         tile_h, tile_w = self._lama_tile()
+        # Give the model clean context beyond the detected damage. Feather only
+        # this extra margin; blurring the original mask mixes scratches back in.
+        holes = _inpaint_mask(mask)
         filled = masked_tiles(
             image,
-            mask,
+            holes,
             lambda tile, tile_mask: _run_lama(session, tile, tile_mask),
             tile_h=tile_h,
             tile_w=tile_w,
             overlap=_LAMA_OVERLAP,
             on_tile=on_tile,
         )
-        soft = cv2.GaussianBlur(mask.astype(np.float32), (5, 5), 0)[..., None]
+        soft = cv2.GaussianBlur(holes.astype(np.float32), (5, 5), 0)
+        soft[mask] = 1.0
+        soft = soft[..., None]
         blended = filled.astype(np.float32) * soft + image.astype(np.float32) * (1.0 - soft)
         return np.clip(blended, 0, 255).astype(np.uint8)
 
@@ -389,6 +394,11 @@ def _run_gfpgan(session, face: np.ndarray) -> np.ndarray:
     if image.shape[0] != 512 or image.shape[1] != 512:
         image = cv2.resize(image, (512, 512), interpolation=cv2.INTER_LINEAR)
     return image
+
+
+def _inpaint_mask(mask: np.ndarray) -> np.ndarray:
+    margin = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    return cv2.dilate(mask.astype(np.uint8), margin).astype(bool)
 
 
 def _run_lama(session, tile: np.ndarray, tile_mask: np.ndarray) -> np.ndarray:

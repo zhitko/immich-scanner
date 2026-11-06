@@ -5,6 +5,7 @@ import zipfile
 from dataclasses import replace
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 from alembic.config import Config
@@ -136,7 +137,23 @@ def test_lama_gets_a_full_mask_at_full_resolution(tmp_path) -> None:
     filled = retoucher._inpaint(image, mask)
     assert seen == [((1, 3, 512, 512), 1.0)]
     assert filled[105, 55, 0] == 200
+    assert np.all(filled[mask] == 200)
     assert filled[600, 1300, 0] == 90
+    assert 90 < filled[99, 55, 0] < 200
+    assert np.all(filled[97, 50:60] == 90)
+
+    # Even a one-pixel mask, including at the image edge, takes the full repair.
+    thin = np.zeros(image.shape[:2], dtype=bool)
+    thin[:30, 0] = True
+    thin[100:150, 100] = True
+    repaired = retoucher._inpaint(image, thin)
+    assert np.all(repaired[thin] == 200)
+    assert np.all(repaired[100:150, 104] == 90)
+
+    seen.clear()
+    untouched = retoucher._inpaint(image, np.zeros_like(thin))
+    assert not seen
+    assert np.array_equal(untouched, image)
 
     hits: list[np.ndarray] = []
 
@@ -514,6 +531,78 @@ def test_scratch_mask_keeps_thin_strokes_and_ignores_a_filled_area() -> None:
     assert not scratch_mask(np.full_like(image, 30)).any()
 
 
+@pytest.mark.parametrize("contrast", [-18, 18])
+@pytest.mark.parametrize("vertical", [False, True])
+def test_scratch_mask_detects_faint_sustained_strokes(contrast, vertical) -> None:
+    image = np.full((240, 300, 3), 120, dtype=np.uint8)
+    image[80:83, 30:270] = 120 + contrast
+    # A short mark at the same contrast is insufficient evidence of a scratch.
+    image[160:163, 50:65] = 120 + contrast
+    if vertical:
+        image = np.ascontiguousarray(image.transpose(1, 0, 2))
+    mask = scratch_mask(image)
+    if vertical:
+        mask = mask.T
+    assert mask[80:83, 30:270].mean() > 0.98
+    assert not mask[160:163, 50:65].any()
+
+
+@pytest.mark.parametrize("value", [15, 210])
+def test_scratch_mask_detects_a_stroke_wider_than_the_fine_kernel(value) -> None:
+    image = np.full((240, 300, 3), 80, dtype=np.uint8)
+    image[100:111, 30:270] = value
+    mask = scratch_mask(image)
+    assert mask[100:111, 30:270].mean() > 0.98
+
+
+@pytest.mark.parametrize("contrast", [-9, 9])
+def test_scratch_mask_follows_a_faint_diagonal_through_grain(contrast) -> None:
+    rng = np.random.default_rng(30)
+    gray = np.full((360, 480), 100, dtype=np.int16)
+    gray += rng.integers(-7, 8, gray.shape, dtype=np.int16)
+    damage = np.zeros(gray.shape, dtype=np.uint8)
+    cv2.line(damage, (40, 300), (430, 50), 1, 3)
+    gray[damage > 0] += contrast
+    image = np.repeat(gray.astype(np.uint8)[..., None], 3, axis=2)
+    mask = scratch_mask(image)
+    assert mask[damage > 0].mean() > 0.98
+    # Allow the repair margin and a small amount of attached grain, not a
+    # widespread response to the noise outside the crease corridor.
+    corridor = cv2.dilate(damage, np.ones((17, 17), dtype=np.uint8)) > 0
+    assert mask[~corridor].mean() < 0.002
+
+
+@pytest.mark.parametrize("polarity", [-1, 1])
+def test_scratch_mask_extends_a_confirmed_diagonal_into_a_faint_tail(polarity) -> None:
+    rng = np.random.default_rng(30)
+    gray = np.full((360, 480), 100, dtype=np.int16)
+    gray += rng.integers(-4, 5, gray.shape, dtype=np.int16)
+    damage = np.zeros(gray.shape, dtype=np.uint8)
+    cv2.line(damage, (40, 300), (430, 50), 1, 3)
+    _ys, xs = np.indices(gray.shape)
+    contrast = polarity * np.where(xs < 210, 10, 5)
+    gray[damage > 0] += contrast[damage > 0]
+    image = np.repeat(gray.astype(np.uint8)[..., None], 3, axis=2)
+    mask = scratch_mask(image)
+    assert mask[(damage > 0) & (xs > 230)].mean() > 0.98
+
+
+def test_scratch_mask_keeps_a_short_confirmed_hairline() -> None:
+    image = np.full((180, 180, 3), 120, dtype=np.uint8)
+    image[80, 60:90] = 240
+    mask = scratch_mask(image)
+    assert mask[80, 60:90].all()
+
+
+def test_scratch_mask_leaves_grain_and_a_broad_light_dark_edge() -> None:
+    rng = np.random.default_rng(24)
+    gray = np.full((240, 300), 95, dtype=np.int16)
+    gray[:, 150:] = 160
+    gray += rng.integers(-10, 11, size=gray.shape, dtype=np.int16)
+    image = np.repeat(gray.astype(np.uint8)[..., None], 3, axis=2)
+    assert not scratch_mask(image).any()
+
+
 def test_scratch_mask_keeps_a_wavy_crease_and_a_fade_between_strong_ends() -> None:
     image = np.full((220, 520, 3), 80, dtype=np.uint8)
     for x in range(520):
@@ -651,6 +740,21 @@ def test_fold_step_eases_out_but_the_sides_keep_their_levels() -> None:
     )
     assert evened[100, 410, 0] == 150
     assert evened[560, 410, 0] == 100
+
+
+@pytest.mark.parametrize("vertical", [False, True])
+def test_short_fold_does_not_relight_an_object_edge(vertical) -> None:
+    image = np.full((600, 800, 3), (205, 170, 150), dtype=np.uint8)
+    image[180:300] = (155, 75, 65)
+    mask = np.zeros(image.shape[:2], dtype=bool)
+    mask[294:304, 200:388] = True
+    along = np.arange(200, 388)
+    fold = Fold("h", along, np.full(along.size, 299.0), 52)
+    if vertical:
+        image = np.ascontiguousarray(image.transpose(1, 0, 2))
+        mask = np.ascontiguousarray(mask.T)
+        fold = Fold("v", fold.along, fold.centers, fold.radius)
+    assert np.array_equal(even_fold_shading(image, [fold], mask), image)
 
 
 def test_identity_face_alignment_changes_only_the_interior() -> None:
