@@ -101,6 +101,12 @@ export class EditorPage {
   private readonly router = inject(Router);
 
   readonly scan = signal<ScanDetail | null>(null);
+  private readonly scanIds = signal<string[]>([]);
+  private readonly scanIndex = computed(() => this.scanIds().indexOf(this.scanId() ?? ''));
+  readonly previousScanId = computed(() => this.scanIds()[this.scanIndex() - 1] ?? null);
+  readonly nextScanId = computed(() =>
+    this.scanIndex() < 0 ? null : (this.scanIds()[this.scanIndex() + 1] ?? null),
+  );
   readonly selectedId = signal<string | null>(null);
   readonly draft = signal<Draft | null>(null);
   readonly albums = signal<Album[]>([]);
@@ -169,6 +175,14 @@ export class EditorPage {
     this.route.paramMap.pipe(map((params) => params.get('id'))).subscribe((id) => {
       if (id) {
         this.scanId.set(id);
+        this.scan.set(null);
+        this.selectedId.set(null);
+        this.draft.set(null);
+        this.dirty.set(false);
+        this.drag.set(null);
+        this.activeJob.set(null);
+        this.notice.set('');
+        this.closePreview();
         this.load(id);
       }
     });
@@ -547,6 +561,17 @@ export class EditorPage {
     const index = this.selectedIndex();
     const next = (Math.max(0, index) + offset + scan.regions.length) % scan.regions.length;
     this.select(scan.regions[next].id);
+  }
+
+  navigateScan(id: string | null): void {
+    if (!id || this.busy() || this.drag()) {
+      return;
+    }
+    this.run(this.flushDraft(), (ok) => {
+      if (ok) {
+        void this.router.navigate(['/scans', id]);
+      }
+    });
   }
 
   updateDraft<K extends keyof Draft>(key: K, value: Draft[K]): void {
@@ -992,6 +1017,21 @@ export class EditorPage {
           return;
         }
         this.applyScan(scan);
+        // Keep the review/history order stable while working through this list.
+        if (!this.scanIds().includes(id)) {
+          this.api.listScans(scan.upload_state === 'complete' ? 'uploaded' : 'open').subscribe({
+            next: (scans) => {
+              if (this.scanId() === id) {
+                this.scanIds.set(scans.map((item) => item.id));
+              }
+            },
+            error: (error: unknown) => {
+              if (this.scanId() === id) {
+                this.error.set(httpError(error));
+              }
+            },
+          });
+        }
       },
       error: (error: unknown) => {
         if (this.scanId() === id) {
@@ -1054,6 +1094,9 @@ export class EditorPage {
     if (job && this.jobRunning()) {
       this.api.getJob(job.id).subscribe({
         next: (next) => {
+          if (this.activeJob()?.id !== job.id) {
+            return;
+          }
           const done = next.status === 'finished' || next.status === 'failed';
           this.activeJob.set({ ...job, status: next.status, error: next.error });
           this.reload();

@@ -30,6 +30,20 @@
         </p>
       </div>
       <div class="toolbar">
+        <button
+          type="button"
+          (click)="navigateScan(previousScanId())"
+          [disabled]="busy() || !!drag() || !previousScanId()"
+        >
+          ← Previous scan
+        </button>
+        <button
+          type="button"
+          (click)="navigateScan(nextScanId())"
+          [disabled]="busy() || !!drag() || !nextScanId()"
+        >
+          Next scan →
+        </button>
         <button type="button" (click)="addRegion()" [disabled]="busy() || scan.files_deleted">
           Add photo
         </button>
