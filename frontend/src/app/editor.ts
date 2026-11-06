@@ -450,6 +450,7 @@ export class EditorPage {
       needed.add('colorize');
     }
     if (region.retouch_scratches) {
+      needed.add('scratch-detection');
       needed.add('inpaint');
     }
     const missing = this.retouchModels().filter((model) => needed.has(model.id) && !model.present);

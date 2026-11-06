@@ -12,8 +12,6 @@ from app.imaging.preview import drop_previews, retouch_preview_path, write_retou
 from app.models import Job, Region, Scan
 from app.retouch.options import (
     expected_retouch_signature,
-    geometry_signature,
-    option_token,
     options_from_region,
 )
 from app.retouch.progress import clear_retouch_progress, set_retouch_progress, set_retouch_stage
@@ -33,7 +31,7 @@ def handle_retouch(session: Session, job: Job, services: Services) -> None:
     options = options_from_region(region)
     if not options.any_selected():
         raise RuntimeError("Choose at least one retouch stage.")
-    produced = f"{geometry_signature(region)}|{option_token(options)}"
+    produced = expected_retouch_signature(region)
     center_x = region.center_x
     center_y = region.center_y
     width = region.width

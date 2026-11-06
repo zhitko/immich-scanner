@@ -1245,6 +1245,24 @@ def test_retouch_keeps_the_crop_and_upload_uses_it_only_when_chosen(client, app_
     assert not list(scan_dir.glob(f"*previews/{second['id']}-*.jpg"))
 
 
+def test_scratch_job_saves_the_detector_revision(client, app_bundle) -> None:
+    app, services = app_bundle
+    services.retoucher = MarkRetoucher()
+    scan_id = _import_bed(services, encode_png(make_bed(speck=False)))
+    app.state.worker.process_available()
+    region = client.get(f"/api/scans/{scan_id}").json()["regions"][0]
+    queued = client.post(
+        f"/api/scans/{scan_id}/regions/{region['id']}/retouch",
+        json={"scratches": True},
+    )
+    assert queued.status_code == 202
+    app.state.worker.process_available()
+    saved = client.get(f"/api/scans/{scan_id}").json()["regions"][0]
+    assert saved["retouch_status"] == "ready"
+    assert saved["retouch_ready"] is True
+    assert "|scratch-v2|" in saved["retouch_signature"]
+
+
 def test_missing_weights_fail_the_photo_and_leave_the_crop(client, app_bundle) -> None:
     app, services = app_bundle
     scan_id = _import_bed(services, encode_png(make_bed(speck=False)))

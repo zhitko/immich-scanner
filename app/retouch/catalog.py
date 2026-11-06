@@ -137,6 +137,25 @@ CATALOG: dict[str, ModelSpec] = {
             ),
         ),
     ),
+    "scratch-detection": ModelSpec(
+        id="scratch-detection",
+        filename="scratch-detection.onnx",
+        version="bopbtl-fp16w",
+        purpose="Detect scratches conservatively",
+        license_id="MIT",
+        license_summary=(
+            "Microsoft Bringing Old Photos Back to Life, MIT. "
+            "Saimon8420's ONNX conversion of FT_Epoch_latest.pt, with fp16 weights "
+            "cast to fp32 and sigmoid included. Whole-photo grayscale input in -1..1 "
+            "at short side 256; probability threshold 0.7 protects intact detail."
+        ),
+        source_url="https://huggingface.co/Saimon8420/old-photo-scratch-detection-web",
+        download_url=(
+            "https://huggingface.co/Saimon8420/old-photo-scratch-detection-web/"
+            "resolve/fdaf4799eaeb7f0ad50ea9e88ac86505486ce3be/scratch_detection_fp16w.onnx"
+        ),
+        sha256="842a7bb191664c3746a635f5a0b9734098d2558712d047e902ef8d39abb96541",
+    ),
     "inpaint": ModelSpec(
         id="inpaint",
         filename="lama.onnx",
@@ -197,7 +216,7 @@ def specs_for(
 ) -> list[ModelSpec]:
     needed: list[ModelSpec] = []
     if scratches:
-        needed.append(CATALOG["inpaint"])
+        needed.extend((CATALOG["scratch-detection"], CATALOG["inpaint"]))
     if colorize:
         needed.append(CATALOG["colorize"])
     plan = restoration_for(upscale=upscale, denoise=denoise)
