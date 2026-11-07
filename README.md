@@ -145,6 +145,8 @@ A scan writes the bed into the data directory and queues detection. Jobs live in
 
 Detection downscales the bed, flood-fills the lid, and turns the remaining contours into minimum-area rectangles. The lid level is the border median. When prints cover enough of the border that the median is no longer the lid, the dark and light halves are both tried, and a thin bezel around the bed is ignored so a print touching the edge stays its own region. Each rectangle is expressed with its smallest tilt (within ±45°), so a landscape print stays landscape whatever angle convention the installed OpenCV uses. Specks and thin non-rectangular shapes, such as an edge shadow, are ignored.
 
+Faded picture areas can match the lid and disappear into that flood fill. A second pass looks for closed paper edges in the image gradients. It expands a crop only when a nearly rectangular outline contains at least 90% of one detected region, overlaps no other region significantly, and adds at least 30% to its area. Light paper margins are trimmed afterward; deep light picture areas are retained. This recovery needs a visible, sufficiently continuous paper outline.
+
 The scanner is opened by one process at a time. Device checks and scans share a lock, status polls answer from the last check while the device is in use, and a scan that hits "Device busy" is retried a few times. The close kernel stays smaller than a 5 mm gap so neighbouring prints are not merged. The detector is the `PhotoDetector` protocol; `OpenCvPhotoDetector` is the implementation used by the app.
 
 ## Immich

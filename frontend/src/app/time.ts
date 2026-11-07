@@ -36,27 +36,42 @@ export function fromDatetimeLocal(value: string): string | null {
   return `${day}T${clock}${sign}${hours}:${minutes}`;
 }
 
-/** Date and optional time from a stored instant. Time is blank when nothing is stored. */
+/** DD/MM/YYYY date and optional time from a stored instant. */
 export function toDateAndTime(value: string | null): { date: string; time: string } {
   const local = toDatetimeLocal(value);
   if (!local) {
     return { date: '', time: '' };
   }
   const [date, time] = local.split('T');
-  return { date: date ?? '', time: time ?? '' };
+  const [year, month, day] = date.split('-');
+  return { date: `${day}/${month}/${year}`, time: time ?? '' };
 }
 
 /**
- * A date can be saved without a time. A blank time is midnight on that date.
+ * A DD/MM/YYYY date can be saved without a time. A blank time is midnight on that date.
  * A blank date clears the instant, even if a time is filled in.
  */
 export function fromDateAndTime(date: string, time: string): string | null {
-  const day = date.trim();
-  if (!day) {
+  const value = date.trim();
+  if (!value) {
+    return null;
+  }
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+  const [, day, month, year] = match;
+  const calendar = new Date(`${year}-${month}-${day}T00:00:00Z`);
+  if (
+    Number.isNaN(calendar.getTime()) ||
+    calendar.getUTCFullYear() !== Number(year) ||
+    calendar.getUTCMonth() + 1 !== Number(month) ||
+    calendar.getUTCDate() !== Number(day)
+  ) {
     return null;
   }
   const clock = time.trim() || '00:00';
-  return fromDatetimeLocal(`${day}T${clock}`);
+  return fromDatetimeLocal(`${year}-${month}-${day}T${clock}`);
 }
 
 export function formatStamp(value: string | null): string {

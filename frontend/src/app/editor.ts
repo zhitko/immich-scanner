@@ -13,6 +13,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EMPTY, Observable, finalize, forkJoin, map, of, switchMap, tap } from 'rxjs';
 
 import { ArchiveApi, httpError } from './api';
+import { DateMask } from './date-mask';
 import {
   Corner,
   Edge,
@@ -86,7 +87,7 @@ const DEFAULT_STROKE = '#f5f1e8';
 
 @Component({
   selector: 'app-editor',
-  imports: [RouterLink],
+  imports: [RouterLink, DateMask],
   templateUrl: './editor.html',
   host: {
     '(document:keydown)': 'onKey($event)',
@@ -783,7 +784,7 @@ export class EditorPage {
     const others = scan.regions.filter((item) => item.id !== region.id);
     const metadata = metadataFrom(draft);
     if (metadata === null) {
-      this.error.set(LOCATION_ERROR);
+      this.error.set(metadataError(draft));
       return;
     }
     if (
@@ -966,7 +967,7 @@ export class EditorPage {
     }
     const metadata = metadataFrom(draft);
     if (metadata === null) {
-      this.error.set(LOCATION_ERROR);
+      this.error.set(metadataError(draft));
       return of(false);
     }
     return this.api.patchRegion(scan.id, region.id, metadata).pipe(
@@ -1275,6 +1276,10 @@ function draftFrom(region: Region): Draft {
 }
 
 function metadataFrom(draft: Draft): RegionMetadata | null {
+  const takenAt = fromDateAndTime(draft.takenDate, draft.takenTime);
+  if (draft.takenDate.trim() && takenAt === null) {
+    return null;
+  }
   const latitude = draft.latitude.trim();
   const longitude = draft.longitude.trim();
   if ((latitude === '') !== (longitude === '')) {
@@ -1290,7 +1295,7 @@ function metadataFrom(draft: Draft): RegionMetadata | null {
   }
   const visibility = draft.visibility;
   return {
-    taken_at: fromDateAndTime(draft.takenDate, draft.takenTime),
+    taken_at: takenAt,
     description: draft.description,
     album_id: draft.albumId || null,
     latitude: lat,
@@ -1302,6 +1307,12 @@ function metadataFrom(draft: Draft): RegionMetadata | null {
         ? visibility
         : null,
   };
+}
+
+function metadataError(draft: Draft): string {
+  return draft.takenDate.trim() && fromDateAndTime(draft.takenDate, draft.takenTime) === null
+    ? 'Enter a valid date in dd/mm/yyyy format and a valid time, or leave the date empty.'
+    : LOCATION_ERROR;
 }
 
 /** "48.85, 2.35" pasted into the latitude field, as copied from a map. */

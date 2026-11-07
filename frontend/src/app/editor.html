@@ -489,10 +489,15 @@
                     <label>
                       Date taken
                       <input
-                        type="date"
+                        appDateMask
+                        type="text"
+                        inputmode="numeric"
+                        placeholder="dd/mm/yyyy"
+                        title="Date taken in dd/mm/yyyy format"
+                        pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
+                        maxlength="10"
                         [value]="draft.takenDate"
-                        (input)="updateDraft('takenDate', $any($event.target).value)"
-                        (change)="updateDraft('takenDate', $any($event.target).value)"
+                        (dateInput)="updateDraft('takenDate', $event)"
                       />
                     </label>
                     <label>
