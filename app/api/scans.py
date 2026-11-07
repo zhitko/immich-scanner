@@ -219,6 +219,9 @@ def update_region(
     scan = _scan(session, scan_id)
     region = _region(session, scan, region_id)
     _apply_patch(scan, region, body)
+    # The browser requests the new preview as soon as this response arrives.
+    # Dependency cleanup can run after sending it, so commit the crop here.
+    session.commit()
     return region_out(region)
 
 

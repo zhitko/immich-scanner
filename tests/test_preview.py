@@ -2,7 +2,10 @@ import os
 import time
 
 import cv2
+import httpx
 import numpy as np
+import pytest
+from fastapi.testclient import TestClient
 
 from tests.synthetic import encode_png, make_bed
 from tests.test_api import RecordingImmich, _import_bed
@@ -73,6 +76,55 @@ def test_a_fresh_preview_is_kept_when_the_crop_changes(client, app_bundle) -> No
     assert stale.name not in names
     assert fresh[1] in names
     assert len(names) == 2
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"center_x": 720, "center_y": 620},
+        {"width": 180, "height": 120},
+        {"angle_deg": 25},
+    ],
+    ids=["move", "resize", "rotate-borders"],
+)
+def test_preview_matches_borders_as_soon_as_save_response_starts(
+    client, app_bundle, change
+) -> None:
+    app, services = app_bundle
+    scan_id = _import_bed(services, encode_png(make_bed()))
+    app.state.worker.process_available()
+    region = client.get(f"/api/scans/{scan_id}").json()["regions"][0]
+    original = _preview(client, scan_id, region["id"])
+    geometry = {
+        key: region[key] for key in ("center_x", "center_y", "width", "height", "angle_deg")
+    } | change
+    region_url = f"/api/scans/{scan_id}/regions/{region['id']}"
+    version = ":".join(str(value) for value in geometry.values())
+    previews = []
+
+    async def save_with_immediate_preview(scope, receive, send):
+        async def on_send(message):
+            if message["type"] == "http.response.start" and message["status"] == 200:
+                # Fetch before dependency cleanup, just as a browser can when it
+                # receives the save response. TestClient normally waits for cleanup.
+                async with httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=app), base_url="http://test"
+                ) as browser:
+                    previews.append(
+                        await browser.get(f"{region_url}/preview", params={"v": version})
+                    )
+            await send(message)
+
+        await app(scope, receive, on_send)
+
+    response = TestClient(save_with_immediate_preview).patch(region_url, json=geometry)
+    assert response.status_code == 200
+    assert len(previews) == 1
+    assert previews[0].status_code == 200
+    current = _preview(client, scan_id, region["id"])
+    assert current != original
+    assert previews[0].content == current
+    assert _jpeg_size(current) == (round(geometry["width"]), round(geometry["height"]))
 
 
 def _jpeg_size(content: bytes) -> tuple[int, int]:
