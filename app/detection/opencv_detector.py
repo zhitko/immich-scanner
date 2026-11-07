@@ -18,6 +18,8 @@ class DetectorConfig:
     max_tolerance: int = 36
     min_fill_ratio: float = 0.45
     edge_inset_px: float = 1.0
+    recovery_min_fill_ratio: float = 0.9
+    recovery_min_area_gain: float = 1.3
     trim_margins: bool = True
     trim_patch_edge: int = 1200
     trim_light_drops: tuple[int, ...] = (12, 30)
@@ -42,6 +44,11 @@ class OpenCvPhotoDetector:
     still kept when its edge stops the flood. The close kernel stays smaller
     than a typical 5 mm gap so neighbouring prints are not merged.
 
+    A pale print can leak into the lid even when its paper edge is visible.
+    Closed gradient contours recover those missing areas, but only when a
+    rectangular outline encloses one existing print and is substantially
+    larger. Edge-only dust and outlines spanning multiple prints are ignored.
+
     Each rectangle is then pulled in past light lines along its sides: the
     white paper margin of old prints and slivers of lid where the fitted
     rectangle overshoots the paper. Each side is checked against a tight
@@ -63,6 +70,7 @@ class OpenCvPhotoDetector:
         small, scale_x, scale_y = _downscale(image, self._config.max_edge)
         gray = cv2.cvtColor(small, cv2.COLOR_RGB2GRAY)
         foreground, lid_level = self._foreground_mask(gray)
+        regions = self._recover_faded_regions(gray, self._regions(foreground))
         found = [
             DetectedRegion(
                 center_x=region.center_x * scale_x,
@@ -71,12 +79,42 @@ class OpenCvPhotoDetector:
                 height=region.height * scale_y,
                 angle_deg=region.angle_deg,
             )
-            for region in self._regions(foreground)
+            for region in regions
         ]
         if self._config.trim_margins and found:
             full_gray = gray if small is image else cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             found = [self._trim_margins(full_gray, region, lid_level) for region in found]
         return sort_reading_order(found)
+
+    def _recover_faded_regions(
+        self, gray: np.ndarray, regions: list[DetectedRegion]
+    ) -> list[DetectedRegion]:
+        if not regions:
+            return regions
+        # Gradients retain low-contrast paper edges that the lid's absolute
+        # colour tolerance erases. Close short breaks before tracing outlines.
+        edges = cv2.Canny(cv2.GaussianBlur(gray, (3, 3), 0), 10, 30)
+        kernel = _odd_size(min(gray.shape) * 0.004)
+        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, np.ones((kernel, kernel), np.uint8))
+        # Contour area measures the enclosed outline, not the thin edge pixels.
+        candidates = self._regions(edges, min_fill_ratio=self._config.recovery_min_fill_ratio)
+
+        recovered = list(regions)
+        for candidate in sorted(candidates, key=lambda item: item.width * item.height):
+            overlaps = [overlap_fraction(candidate, region) for region in regions]
+            matches = [index for index, overlap in enumerate(overlaps) if overlap > 0.1]
+            if len(matches) != 1:
+                continue
+            index = matches[0]
+            region = regions[index]
+            if overlaps[index] < 0.9:
+                continue
+            if candidate.width * candidate.height < (
+                self._config.recovery_min_area_gain * region.width * region.height
+            ):
+                continue
+            recovered[index] = candidate
+        return recovered
 
     def _trim_margins(
         self, gray: np.ndarray, region: DetectedRegion, lid_level: float
@@ -197,7 +235,9 @@ class OpenCvPhotoDetector:
         frame = max(2, int(round(min(height, width) * self._config.bezel_fraction)))
         return _clear_thin_border(opened, frame)
 
-    def _regions(self, foreground: np.ndarray) -> list[DetectedRegion]:
+    def _regions(
+        self, foreground: np.ndarray, *, min_fill_ratio: float | None = None
+    ) -> list[DetectedRegion]:
         height, width = foreground.shape
         contours, _hierarchy = cv2.findContours(
             foreground, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
@@ -205,6 +245,8 @@ class OpenCvPhotoDetector:
         min_area = self._config.min_area_ratio * height * width
         min_side = self._config.min_side_ratio * min(height, width)
         inset = self._config.edge_inset_px * 2
+        if min_fill_ratio is None:
+            min_fill_ratio = self._config.min_fill_ratio
         found: list[DetectedRegion] = []
         for contour in contours:
             area = cv2.contourArea(contour)
@@ -215,7 +257,7 @@ class OpenCvPhotoDetector:
                 continue
             if rect_w * rect_h > 0.98 * width * height:
                 continue
-            if area < self._config.min_fill_ratio * rect_w * rect_h:
+            if area < min_fill_ratio * rect_w * rect_h:
                 continue
             rect_w, rect_h, angle = normalize_rect(rect_w, rect_h, angle)
             found.append(

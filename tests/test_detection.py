@@ -1,7 +1,13 @@
 import numpy as np
+import pytest
 
 from app.detection.base import DetectedRegion
-from app.detection.opencv_detector import OpenCvPhotoDetector, normalize_rect, overlap_fraction
+from app.detection.opencv_detector import (
+    DetectorConfig,
+    OpenCvPhotoDetector,
+    normalize_rect,
+    overlap_fraction,
+)
 from app.imaging.crop import crop_rotated_rect
 from tests.synthetic import make_bed, paint_photo
 
@@ -179,6 +185,104 @@ def test_only_dust_returns_no_regions() -> None:
     image = np.full((800, 600, 3), 255, np.uint8)
     image[20:28, 20:28] = (0, 0, 0)
     assert OpenCvPhotoDetector().detect(image) == []
+
+
+@pytest.mark.parametrize(("background", "edge", "ink"), [(230, 205, 100), (20, 45, 180)])
+@pytest.mark.parametrize("angle", [-8, 0, 7])
+@pytest.mark.parametrize("scale", [1, 2])
+def test_faded_half_is_recovered_from_low_contrast_paper_edges(
+    background: int, edge: int, ink: int, angle: float, scale: int
+) -> None:
+    image = np.full((900 * scale, 700 * scale, 3), background, np.uint8)
+    # Scanner bezel raises the lid tolerance. Paper edges remain visible, but
+    # the absolute-colour flood passes through them into the faded picture.
+    image[: 3 * scale] = 255 - background
+    center = (350 * scale, 450 * scale)
+    paint_photo(
+        image,
+        (background,) * 3,
+        center,
+        (300 * scale, 520 * scale),
+        angle,
+        border=3 * scale,
+        border_color=(edge,) * 3,
+    )
+    radians = np.deg2rad(angle)
+    dark_center = (
+        center[0] + 120 * scale * np.sin(radians),
+        center[1] - 120 * scale * np.cos(radians),
+    )
+    paint_photo(image, (ink,) * 3, dark_center, (270 * scale, 240 * scale), angle, border=0)
+    regions = OpenCvPhotoDetector(DetectorConfig(trim_margins=False)).detect(image)
+    assert len(regions) == 1
+    region = regions[0]
+    assert abs(region.center_x / scale - 350) < 5
+    assert abs(region.center_y / scale - 450) < 5
+    assert abs(region.width / scale - 300) < 5
+    assert abs(region.height / scale - 520) < 5
+    assert abs(region.angle_deg - angle) < 1
+
+    # Trimming may remove the narrow paper border, never the faded half.
+    trimmed = OpenCvPhotoDetector().detect(image)[0]
+    assert trimmed.height / scale > 480
+    assert abs(trimmed.center_y / scale - 450) < 20
+
+
+def test_edge_recovery_keeps_neighbouring_faded_prints_separate() -> None:
+    image = np.full((900, 700, 3), 230, np.uint8)
+    image[:3] = 25
+    for center_x in (194, 506):
+        paint_photo(
+            image,
+            (230,) * 3,
+            (center_x, 450),
+            (300, 520),
+            0,
+            border=3,
+            border_color=(205,) * 3,
+        )
+        paint_photo(image, (100,) * 3, (center_x, 330), (270, 240), 0, border=0)
+    regions = OpenCvPhotoDetector(DetectorConfig(trim_margins=False)).detect(image)
+    assert len(regions) == 2
+    assert overlap_fraction(*regions) == 0
+    for region, center_x in zip(regions, (194, 506), strict=True):
+        assert abs(region.center_x - center_x) < 5
+        assert abs(region.height - 520) < 5
+
+
+def test_edge_outline_around_multiple_prints_does_not_expand_either() -> None:
+    image = np.full((900, 700, 3), 230, np.uint8)
+    image[:3] = 25
+    paint_photo(
+        image,
+        (230,) * 3,
+        (350, 450),
+        (600, 800),
+        0,
+        border=3,
+        border_color=(205,) * 3,
+    )
+    for center_y in (250, 650):
+        paint_photo(image, (100,) * 3, (350, center_y), (300, 200), 0, border=0)
+    regions = OpenCvPhotoDetector().detect(image)
+    assert len(regions) == 2
+    for region, center_y in zip(regions, (250, 650), strict=True):
+        assert abs(region.center_y - center_y) < 5
+        assert abs(region.width - 300) < 5
+        assert abs(region.height - 200) < 5
+
+
+def test_unclosed_paper_edge_does_not_invent_a_larger_photo() -> None:
+    image = np.full((900, 700, 3), 230, np.uint8)
+    image[:3] = 25
+    # An L-shaped shadow is not sufficient evidence for a paper rectangle.
+    image[190:710, 200:203] = 205
+    image[190:193, 200:500] = 205
+    paint_photo(image, (100,) * 3, (350, 330), (270, 240), 0, border=0)
+    regions = OpenCvPhotoDetector().detect(image)
+    assert len(regions) == 1
+    assert abs(regions[0].center_y - 330) < 5
+    assert abs(regions[0].height - 240) < 5
 
 
 def _inner_mean(image: np.ndarray) -> np.ndarray:
