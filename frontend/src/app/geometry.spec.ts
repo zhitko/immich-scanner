@@ -109,10 +109,16 @@ describe('region geometry', () => {
     expect(topRight).toEqual({ x: 120, y: 70 });
   });
 
-  it('snaps near-straight angles and steps when asked', () => {
-    expect(snapAngle(1.2, null)).toBe(0);
-    expect(snapAngle(-89, null)).toBe(-90);
-    expect(snapAngle(7, null)).toBe(7);
+  it('preserves small adjustments near horizontal and vertical without snapping', () => {
+    for (const angle of [-179.5, -90.5, -89, -1.2, 0, 1.2, 7, 89.5, 90.5, 179.5]) {
+      expect(snapAngle(angle, null)).toBe(angle);
+    }
+  });
+
+  it('snaps to the requested step when Shift is held', () => {
+    expect(snapAngle(1.2, 15)).toBe(0);
+    expect(snapAngle(-89, 15)).toBe(-90);
     expect(snapAngle(22, 15)).toBe(15);
+    expect(snapAngle(89.5, 15)).toBe(90);
   });
 });

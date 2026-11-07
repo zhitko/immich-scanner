@@ -234,13 +234,12 @@ export function rectFromPoints(a: Point, b: Point, bounds: Bounds): Rect {
   };
 }
 
-/** Snap to a multiple of `step` degrees, or to the nearest right angle when within `near`. */
-export function snapAngle(deg: number, step: number | null, near = 1.5): number {
+/** Rotate freely unless an explicit snap step is requested. */
+export function snapAngle(deg: number, step: number | null): number {
   if (step) {
     return normalizeAngle(Math.round(deg / step) * step);
   }
-  const right = Math.round(deg / 90) * 90;
-  return Math.abs(deg - right) <= near ? normalizeAngle(right) : deg;
+  return deg;
 }
 
 export function distance(a: Point, b: Point): number {
