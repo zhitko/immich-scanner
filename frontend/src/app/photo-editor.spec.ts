@@ -63,7 +63,7 @@ describe('Photo editor', () => {
 
   async function open() {
     const harness = await RouterTestingHarness.create('/photos/photo-2?status=all&filter=original');
-    http.expectOne('/api/photos/photo-2').flush(detail);
+    http.expectOne('/api/photos/photo-2?apply_defaults=true').flush(detail);
     http
       .expectOne('/api/photos?state=all&filters=original')
       .flush([{ id: 'photo-1' }, { id: 'photo-2' }, { id: 'photo-3' }]);
@@ -103,7 +103,7 @@ describe('Photo editor', () => {
     save.flush({ ...photo, description: 'Family portrait' });
     await harness.fixture.whenStable();
     http
-      .expectOne('/api/photos/photo-3')
+      .expectOne('/api/photos/photo-3?apply_defaults=true')
       .flush({ ...detail, regions: [{ ...photo, id: 'photo-3' }] });
     harness.detectChanges();
     expect(TestBed.inject(Router).url).toBe('/photos/photo-3?status=all&filter=original');
@@ -172,5 +172,24 @@ describe('Photo editor', () => {
     expect(images[0].getAttribute('src')).toContain(
       '/api/scans/scan-1/regions/photo-2/retouch-preview?v=v1',
     );
+  });
+
+  it('preserves a processing edit when background detection refreshes an untouched photo', async () => {
+    const timer = vi.spyOn(window, 'setInterval').mockReturnValue(0);
+    const harness = await open();
+    const editor = harness.routeDebugElement!.componentInstance as EditorPage;
+    editor.setRetouch('retouch_denoise', false);
+    http.expectOne('/api/scans/scan-1/regions/photo-2').flush({
+      ...photo,
+      retouch_denoise: false,
+    });
+    editor.scan.update((scan) => ({ ...scan!, detecting: true }));
+    const poll = timer.mock.calls.find(([, delay]) => delay === 1500)![0] as () => void;
+    poll();
+    http.expectOne('/api/photos/photo-2').flush({
+      ...detail,
+      regions: [{ ...photo, retouch_denoise: false }],
+    });
+    expect(editor.selected()?.retouch_denoise).toBe(false);
   });
 });

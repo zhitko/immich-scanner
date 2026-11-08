@@ -1059,7 +1059,7 @@ export class EditorPage {
   private load(id: string): void {
     this.error.set('');
     const revision = this.scanRevision;
-    (this.photoMode ? this.api.getPhoto(id) : this.api.getScan(id)).subscribe({
+    (this.photoMode ? this.api.getPhoto(id, true) : this.api.getScan(id, true)).subscribe({
       next: (scan) => {
         if (revision !== this.scanRevision || this.scanId() !== id) {
           return;

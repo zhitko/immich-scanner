@@ -58,6 +58,18 @@ describe('ArchiveApi', () => {
     request.flush([]);
   });
 
+  it('requests current processing defaults only when opening an editor', () => {
+    api.getPhoto('photo-1', true).subscribe();
+    http.expectOne('/api/photos/photo-1?apply_defaults=true').flush({});
+    api.getScan('scan-1', true).subscribe();
+    http.expectOne('/api/scans/scan-1?apply_defaults=true').flush({});
+
+    api.getPhoto('photo-1').subscribe();
+    http.expectOne('/api/photos/photo-1').flush({});
+    api.getScan('scan-1').subscribe();
+    http.expectOne('/api/scans/scan-1').flush({});
+  });
+
   it('uploads one region and asks for detection', () => {
     api.upload('scan-1', ['region-1']).subscribe((body) => expect(body.job_id).toBe('job-1'));
     const upload = http.expectOne('/api/scans/scan-1/upload');

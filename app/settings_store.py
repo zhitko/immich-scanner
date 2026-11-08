@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
-from app.models import Setting
+from app.models import Region, Setting
 
 OUTPUT_FORMATS = ("jpeg", "png")
 SCAN_FORMATS = ("tiff", "png")
@@ -187,6 +187,17 @@ def retouch_columns(settings: ArchiveSettings) -> dict[str, bool | int]:
         "retouch_gentle_denoise": settings.retouch_gentle_denoise,
         "retouch_output_scale": settings.retouch_output_scale,
     }
+
+
+def apply_processing_defaults(region: Region, settings: ArchiveSettings) -> None:
+    """Refresh an untouched photo on editor entry, never during retouch."""
+
+    if region.retouch_status not in {"none", "failed"}:
+        return
+    if region.retouch_path or region.retouch_signature:
+        return
+    for key, value in retouch_columns(settings).items():
+        setattr(region, key, value)
 
 
 def _flag(raw: str | None) -> bool:

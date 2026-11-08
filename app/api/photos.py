@@ -8,6 +8,7 @@ from app.api.deps import get_session
 from app.models import Region, Scan
 from app.schemas import PhotoOut, ScanDetail
 from app.serialize import region_out, scan_summary
+from app.settings_store import apply_processing_defaults, load_settings
 
 router = APIRouter(prefix="/photos", tags=["photos"])
 
@@ -51,11 +52,18 @@ def list_photos(
 
 
 @router.get("/{photo_id}", response_model=ScanDetail)
-def get_photo(photo_id: str, session: Session = Depends(get_session)) -> ScanDetail:
+def get_photo(
+    photo_id: str,
+    apply_defaults: bool = False,
+    session: Session = Depends(get_session),
+) -> ScanDetail:
     region = session.get(Region, photo_id)
     if region is None:
         raise HTTPException(status_code=404, detail="photo not found")
     scan = session.get(Scan, region.scan_id)
+    if apply_defaults and not scan.files_deleted:
+        apply_processing_defaults(region, load_settings(session))
+        session.commit()
     return ScanDetail(
         **scan_summary(session, scan).model_dump(),
         regions=[region_out(region)],

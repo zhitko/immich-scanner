@@ -25,7 +25,7 @@ from app.schemas import (
     UploadRequest,
 )
 from app.serialize import region_out, scan_detail, scan_summary
-from app.settings_store import load_settings, retouch_columns
+from app.settings_store import apply_processing_defaults, load_settings, retouch_columns
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 
@@ -75,8 +75,18 @@ def list_scans(
 
 
 @router.get("/{scan_id}", response_model=ScanDetail)
-def get_scan(scan_id: str, session: Session = Depends(get_session)) -> ScanDetail:
-    return scan_detail(session, _scan(session, scan_id))
+def get_scan(
+    scan_id: str,
+    apply_defaults: bool = False,
+    session: Session = Depends(get_session),
+) -> ScanDetail:
+    scan = _scan(session, scan_id)
+    if apply_defaults and not scan.files_deleted:
+        stored = load_settings(session)
+        for region in session.scalars(select(Region).where(Region.scan_id == scan.id)):
+            apply_processing_defaults(region, stored)
+        session.commit()
+    return scan_detail(session, scan)
 
 
 @router.delete("/{scan_id}", status_code=204)

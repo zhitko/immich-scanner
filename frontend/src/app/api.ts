@@ -33,16 +33,20 @@ export class ArchiveApi {
     return this.http.get<ScanSummary[]>('/api/scans', { params: { state } });
   }
 
-  getScan(id: string): Observable<ScanDetail> {
-    return this.http.get<ScanDetail>(`/api/scans/${id}`);
+  getScan(id: string, applyDefaults = false): Observable<ScanDetail> {
+    return this.http.get<ScanDetail>(`/api/scans/${id}`, {
+      params: applyDefaults ? { apply_defaults: true } : {},
+    });
   }
 
   listPhotos(state: 'open' | 'uploaded' | 'all', filters: PhotoFilter[] = []): Observable<Photo[]> {
     return this.http.get<Photo[]>('/api/photos', { params: { state, filters } });
   }
 
-  getPhoto(id: string): Observable<ScanDetail> {
-    return this.http.get<ScanDetail>(`/api/photos/${id}`);
+  getPhoto(id: string, applyDefaults = false): Observable<ScanDetail> {
+    return this.http.get<ScanDetail>(`/api/photos/${id}`, {
+      params: applyDefaults ? { apply_defaults: true } : {},
+    });
   }
 
   deleteScan(id: string): Observable<void> {
