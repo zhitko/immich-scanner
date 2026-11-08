@@ -3,6 +3,28 @@ from app.jobs.queue import enqueue_job
 from app.models import Job
 
 
+def test_worker_prioritizes_upload_and_detection_in_queue_order(app_bundle, monkeypatch) -> None:
+    app, services = app_bundle
+    processed = []
+
+    def record(_session, job, _services) -> None:
+        processed.append(job.type)
+
+    monkeypatch.setattr(
+        "app.jobs.worker.HANDLERS",
+        {job_type: record for job_type in ("retouch", "match", "upload", "detect")},
+    )
+    session = services.session_factory()
+    for job_type in ("retouch", "upload", "match", "detect", "upload"):
+        enqueue_job(session, job_type=job_type, payload={})
+        session.flush()
+    session.commit()
+    session.close()
+
+    assert app.state.worker.process_available() == 5
+    assert processed == ["upload", "detect", "upload", "retouch", "match"]
+
+
 def test_worker_runs_a_job_and_records_failure(app_bundle) -> None:
     app, services = app_bundle
     session = services.session_factory()

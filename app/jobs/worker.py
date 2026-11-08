@@ -1,7 +1,7 @@
 import logging
 import threading
 
-from sqlalchemy import select, update
+from sqlalchemy import case, select, update
 
 from app.clock import utcnow
 from app.jobs.handlers import handle_detect, handle_upload
@@ -106,7 +106,14 @@ class JobWorker:
         session = self._services.session_factory()
         try:
             job = session.scalar(
-                select(Job).where(Job.status == "queued").order_by(Job.created_at, Job.id).limit(1)
+                select(Job)
+                .where(Job.status == "queued")
+                .order_by(
+                    case((Job.type.in_(["upload", "detect"]), 0), else_=1),
+                    Job.created_at,
+                    Job.id,
+                )
+                .limit(1)
             )
             if job is None:
                 return None
