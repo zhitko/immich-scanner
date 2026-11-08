@@ -17,7 +17,7 @@
           <span class="lamp-dot" aria-hidden="true"></span>
           {{ scannerMessage() || 'Checking the scanner…' }}
         </p>
-        <label>
+        <label for="default-album">
           Device
           <select
             [value]="settings.device_name"
@@ -133,7 +133,7 @@
         </label>
         <p class="hint">
           Create the key in Immich under Account settings → API keys. It needs
-          <code>asset.upload</code>, <code>asset.update</code>, <code>album.read</code>, and
+          <code>asset.upload</code>, <code>asset.read</code>, <code>asset.update</code>, <code>album.read</code>, and
           <code>albumAsset.create</code>.
         </p>
         <div class="actions">
@@ -150,19 +150,41 @@
             </span>
           }
         </div>
-        <label>
+        <label for="default-album">
           Default album for new photos
+          @if (albumsLoaded()) {
+            <select id="default-album" (change)="setDefaultAlbum($any($event.target).value)">
+              <option value="" [selected]="settings.default_album_id === ''">No album</option>
+              @for (album of albums(); track album.id) {
+                <option
+                  [value]="album.id"
+                  [selected]="settings.default_album_id === album.id"
+                >
+                  {{ album.name }} ({{ album.asset_count }})
+                </option>
+              }
+              @if (settings.default_album_id && !knownAlbum(settings.default_album_id)) {
+                <option [value]="settings.default_album_id" [selected]="true">
+                  {{ settings.default_album_id }}
+                </option>
+              }
+            </select>
+          } @else {
+            <select id="default-album" disabled>
+              <option>Loading albums…</option>
+            </select>
+          }
+        </label>
+        <label>
+          Default visibility for new photos
           <select
-            [value]="settings.default_album_id"
-            (change)="update('default_album_id', $any($event.target).value)"
+            [value]="settings.default_visibility"
+            (change)="update('default_visibility', $any($event.target).value)"
           >
-            <option value="">No album</option>
-            @for (album of albums(); track album.id) {
-              <option [value]="album.id">{{ album.name }} ({{ album.asset_count }})</option>
-            }
-            @if (settings.default_album_id && !knownAlbum(settings.default_album_id)) {
-              <option [value]="settings.default_album_id">{{ settings.default_album_id }}</option>
-            }
+            <option value="">Immich default</option>
+            <option value="timeline">Timeline</option>
+            <option value="archive">Archive</option>
+            <option value="hidden">Hidden</option>
           </select>
         </label>
         @if (!albums().length && settings.immich_base_url) {

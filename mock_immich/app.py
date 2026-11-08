@@ -67,7 +67,9 @@ def create_mock_app() -> FastAPI:
         return {"major": 3, "minor": 3, "patch": 5, "prerelease": None}
 
     @app.get("/api/albums")
-    def albums(x_api_key: str | None = Header(default=None)) -> list[dict[str, object]]:
+    def albums(
+        assetId: str | None = None, x_api_key: str | None = Header(default=None)
+    ) -> list[dict[str, object]]:
         _require_key(x_api_key)
         return [
             {
@@ -77,6 +79,7 @@ def create_mock_app() -> FastAPI:
                 "description": "",
             }
             for album in STORE.albums.values()
+            if assetId is None or assetId in album["assetIds"]
         ]
 
     @app.post("/api/assets")
@@ -122,6 +125,21 @@ def create_mock_app() -> FastAPI:
         }
         STORE.by_checksum[digest] = asset_id
         return JSONResponse({"id": asset_id, "status": "created"}, status_code=201)
+
+    @app.get("/api/assets/{asset_id}")
+    def get_asset(asset_id: str, x_api_key: str | None = Header(default=None)) -> dict[str, object]:
+        _require_key(x_api_key)
+        asset = STORE.assets.get(asset_id)
+        if asset is None:
+            raise HTTPException(status_code=404, detail="asset not found")
+        return {
+            "id": asset_id,
+            "isFavorite": asset["isFavorite"],
+            "visibility": asset.get("visibility", "timeline"),
+            "exifInfo": {key: asset.get(key) for key in (
+                "description", "dateTimeOriginal", "latitude", "longitude", "rating"
+            )},
+        }
 
     @app.put("/api/assets/{asset_id}")
     def update_asset(

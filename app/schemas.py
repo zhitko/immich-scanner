@@ -320,6 +320,7 @@ class SettingsOut(BaseModel):
     output_format: Literal["jpeg", "png"]
     jpeg_quality: int
     default_album_id: str
+    default_visibility: Literal["", "timeline", "archive", "hidden"]
     device_name: str
     resolution_dpi: int
     scan_format: Literal["tiff", "png"]
@@ -346,6 +347,7 @@ class SettingsUpdate(BaseModel):
     output_format: Literal["jpeg", "png"] = "jpeg"
     jpeg_quality: int = Field(default=95, ge=80, le=100)
     default_album_id: str = ""
+    default_visibility: Literal["", "timeline", "archive", "hidden"] = ""
     device_name: str = ""
     resolution_dpi: int = Field(default=300, ge=50, le=4800)
     scan_format: Literal["tiff", "png"] = "tiff"

@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,7 @@ from app.api.deps import get_services, get_session
 from app.clock import utcnow
 from app.geometry import ensure_geometry
 from app.imaging.preview import drop_previews, region_preview, retouch_preview
+from app.immich.gateway import ImmichError
 from app.jobs.handlers import refresh_upload_state
 from app.jobs.queue import enqueue_job
 from app.models import Region, Scan
@@ -204,7 +206,7 @@ def create_region(
         longitude=None,
         is_favorite=False,
         rating=None,
-        visibility=None,
+        visibility=stored.default_visibility or None,
         upload_status="pending",
         immich_asset_id=None,
         immich_status=None,
@@ -338,6 +340,54 @@ def preview_region(
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return FileResponse(path, media_type="image/jpeg")
+
+
+@router.post("/{scan_id}/regions/{region_id}/refresh-immich", response_model=RegionOut)
+def refresh_immich_metadata(
+    scan_id: str,
+    region_id: str,
+    session: Session = Depends(get_session),
+    services: Services = Depends(get_services),
+) -> RegionOut:
+    region = _region(session, _scan(session, scan_id), region_id)
+    if not region.immich_asset_id:
+        raise HTTPException(status_code=409, detail="Photo has not been uploaded to Immich")
+    if region.upload_status == "uploading":
+        raise HTTPException(status_code=409, detail="Photo is uploading")
+    settings = load_settings(session)
+    try:
+        gateway = services.build_gateway(settings.immich_base_url, settings.immich_api_key)
+        try:
+            details = gateway.get_asset(region.immich_asset_id)
+        finally:
+            gateway.close()
+        metadata = details.metadata
+        values = RegionPatch(
+            taken_at=metadata.date_time_original,
+            description=metadata.description,
+            latitude=metadata.latitude,
+            longitude=metadata.longitude,
+            is_favorite=metadata.is_favorite,
+            rating=metadata.rating if metadata.rating not in (0, -1) else None,
+            visibility=metadata.visibility,
+        )
+    except (ImmichError, ValidationError) as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Could not refresh from Immich: {exc}"
+        ) from exc
+    region.taken_at = values.taken_at
+    region.description = values.description or ""
+    region.latitude = values.latitude
+    region.longitude = values.longitude
+    region.is_favorite = bool(values.is_favorite)
+    region.rating = values.rating
+    region.visibility = values.visibility
+    region.album_id = details.album_ids[0] if details.album_ids else None
+    region.album_linked = bool(region.album_id)
+    region.metadata_synced = True
+    region.updated_at = utcnow()
+    session.flush()
+    return region_out(region)
 
 
 def _apply_patch(scan: Scan, region: Region, body: RegionPatch) -> None:

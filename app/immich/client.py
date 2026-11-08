@@ -1,6 +1,13 @@
 import httpx
 
-from app.immich.gateway import Album, AssetMetadata, AssetUploadResult, ImmichError, PhotoUpload
+from app.immich.gateway import (
+    Album,
+    AssetDetails,
+    AssetMetadata,
+    AssetUploadResult,
+    ImmichError,
+    PhotoUpload,
+)
 
 _UPDATE_FIELDS = {
     "dateTimeOriginal",
@@ -109,6 +116,30 @@ class ImmichClient:
         if unknown:
             raise ImmichError(f"refusing to send unknown asset fields: {sorted(unknown)}")
         self._json("PUT", f"/assets/{asset_id}", json=payload)
+
+    def get_asset(self, asset_id: str) -> AssetDetails:
+        asset = self._json("GET", f"/assets/{asset_id}")
+        albums = self._json("GET", "/albums", params={"assetId": asset_id})
+        if not isinstance(asset, dict) or not isinstance(albums, list):
+            raise ImmichError("invalid asset or album response from Immich")
+        exif = asset.get("exifInfo") or {}
+        if not isinstance(exif, dict):
+            raise ImmichError("invalid asset metadata from Immich")
+        try:
+            return AssetDetails(
+                metadata=AssetMetadata(
+                    description=exif.get("description") or "",
+                    is_favorite=asset.get("isFavorite", False),
+                    date_time_original=exif.get("dateTimeOriginal"),
+                    latitude=exif.get("latitude"),
+                    longitude=exif.get("longitude"),
+                    rating=exif.get("rating"),
+                    visibility=asset.get("visibility"),
+                ),
+                album_ids=[str(album["id"]) for album in albums],
+            )
+        except (KeyError, TypeError) as exc:
+            raise ImmichError("invalid album response from Immich") from exc
 
     def _json(self, method: str, path: str, **kwargs: object) -> object:
         response = self._request(method, path, **kwargs)

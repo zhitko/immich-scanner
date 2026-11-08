@@ -115,6 +115,7 @@ export class EditorPage {
   readonly selectedId = signal<string | null>(null);
   readonly draft = signal<Draft | null>(null);
   readonly albums = signal<Album[]>([]);
+  readonly albumsLoaded = signal(false);
   readonly retouchModels = signal<RetouchModel[]>([]);
   readonly immichUrl = signal('');
   readonly error = signal('');
@@ -223,8 +224,14 @@ export class EditorPage {
       }
     });
     this.api.listAlbums().subscribe({
-      next: (albums) => this.albums.set(albums),
-      error: () => this.albums.set([]),
+      next: (albums) => {
+        this.albums.set(albums);
+        this.albumsLoaded.set(true);
+      },
+      error: () => {
+        this.albums.set([]);
+        this.albumsLoaded.set(true);
+      },
     });
     this.api.getSettings().subscribe({
       next: (settings) => this.immichUrl.set(settings.immich_base_url.replace(/\/+$/, '')),
@@ -806,6 +813,17 @@ export class EditorPage {
       if (ok) {
         this.flash('Saved locally.');
       }
+    });
+  }
+
+  refreshImmich(): void {
+    const scan = this.scan();
+    const region = this.selected();
+    if (!scan || !region?.immich_asset_id || this.busy() || this.uploading()) return;
+    if (!window.confirm('Replace local photo details with the current values from Immich? Unsaved and saved local metadata changes will be lost.')) return;
+    this.run(this.api.refreshImmich(scan.id, region.id), (updated) => {
+      this.replaceRegion(updated);
+      this.flash('Photo details refreshed from Immich.');
     });
   }
 

@@ -167,6 +167,7 @@ export interface Settings {
   output_format: 'jpeg' | 'png';
   jpeg_quality: number;
   default_album_id: string;
+  default_visibility: string;
   device_name: string;
   resolution_dpi: number;
   scan_format: 'tiff' | 'png';

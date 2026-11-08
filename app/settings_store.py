@@ -18,6 +18,7 @@ class ArchiveSettings:
     output_format: str = "jpeg"
     jpeg_quality: int = 95
     default_album_id: str = ""
+    default_visibility: str = ""
     device_name: str = ""
     resolution_dpi: int = 300
     scan_format: str = "tiff"
@@ -56,12 +57,16 @@ def load_settings(session: Session) -> ArchiveSettings:
     if scan_mode not in SCAN_MODES:
         scan_mode = "Color"
     upscale = _flag(stored.get("retouch_upscale"))
+    visibility = stored.get("default_visibility", "")
+    if visibility not in ("", "timeline", "archive", "hidden"):
+        visibility = ""
     return ArchiveSettings(
         immich_base_url=stored.get("immich_base_url", ""),
         immich_api_key=stored.get("immich_api_key", ""),
         output_format=output_format,
         jpeg_quality=jpeg_quality,
         default_album_id=stored.get("default_album_id", ""),
+        default_visibility=visibility,
         device_name=stored.get("device_name", ""),
         resolution_dpi=resolution,
         scan_format=scan_format,
@@ -89,6 +94,7 @@ def save_settings(session: Session, settings: ArchiveSettings) -> None:
         "output_format": settings.output_format,
         "jpeg_quality": str(settings.jpeg_quality),
         "default_album_id": settings.default_album_id.strip(),
+        "default_visibility": settings.default_visibility,
         "device_name": settings.device_name.strip(),
         "resolution_dpi": str(settings.resolution_dpi),
         "scan_format": settings.scan_format,
@@ -129,6 +135,7 @@ def seed_settings(session: Session, process: Settings) -> None:
         output_format=current.output_format,
         jpeg_quality=current.jpeg_quality,
         default_album_id=current.default_album_id,
+        default_visibility=current.default_visibility,
         device_name=current.device_name,
         resolution_dpi=resolution,
         scan_format=scan_format,
@@ -190,7 +197,12 @@ def retouch_columns(settings: ArchiveSettings) -> dict[str, bool | int]:
 
 
 def apply_processing_defaults(region: Region, settings: ArchiveSettings) -> None:
-    """Refresh an untouched photo on editor entry, never during retouch."""
+    """Refresh editor defaults for a local photo without changing its history."""
+
+    if region.immich_asset_id is None and not region.album_id and settings.default_album_id:
+        region.album_id = settings.default_album_id
+    if region.immich_asset_id is None and not region.visibility and settings.default_visibility:
+        region.visibility = settings.default_visibility
 
     if region.retouch_status not in {"none", "failed"}:
         return

@@ -71,6 +71,7 @@ def _archive(body: SettingsUpdate) -> ArchiveSettings:
         output_format=body.output_format,
         jpeg_quality=body.jpeg_quality,
         default_album_id=body.default_album_id.strip(),
+        default_visibility=body.default_visibility,
         device_name=body.device_name.strip(),
         resolution_dpi=body.resolution_dpi,
         scan_format=body.scan_format,
@@ -98,6 +99,7 @@ def _out(settings: ArchiveSettings) -> SettingsOut:
         output_format=settings.output_format,  # type: ignore[arg-type]
         jpeg_quality=settings.jpeg_quality,
         default_album_id=settings.default_album_id,
+        default_visibility=settings.default_visibility,  # type: ignore[arg-type]
         device_name=settings.device_name,
         resolution_dpi=settings.resolution_dpi,
         scan_format=settings.scan_format,  # type: ignore[arg-type]

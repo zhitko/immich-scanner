@@ -152,7 +152,7 @@ def _replace_open_regions(session: Session, scan: Scan, detected) -> None:
                 longitude=None,
                 is_favorite=False,
                 rating=None,
-                visibility=None,
+                visibility=stored.default_visibility or None,
                 upload_status="pending",
                 immich_asset_id=None,
                 immich_status=None,

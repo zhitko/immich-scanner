@@ -118,6 +118,10 @@ export class ArchiveApi {
     return this.http.patch<Region>(`/api/scans/${scanId}/regions/${regionId}`, body);
   }
 
+  refreshImmich(scanId: string, regionId: string): Observable<Region> {
+    return this.http.post<Region>(`/api/scans/${scanId}/regions/${regionId}/refresh-immich`, {});
+  }
+
   retouch(
     scanId: string,
     regionId: string,

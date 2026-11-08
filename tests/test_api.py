@@ -2,7 +2,14 @@ import time
 
 import piexif
 
-from app.immich.gateway import Album, AssetMetadata, AssetUploadResult, ImmichError, PhotoUpload
+from app.immich.gateway import (
+    Album,
+    AssetDetails,
+    AssetMetadata,
+    AssetUploadResult,
+    ImmichError,
+    PhotoUpload,
+)
 from app.intake import register_scan
 from app.models import Scan
 from app.scanner.base import ScannerError
@@ -37,6 +44,12 @@ class RecordingImmich:
     def update_asset(self, asset_id: str, metadata: AssetMetadata) -> None:
         self.updates.append((asset_id, metadata))
 
+    def get_asset(self, asset_id: str) -> AssetDetails:
+        return AssetDetails(
+            AssetMetadata(description="From Immich", is_favorite=True, visibility="hidden"),
+            [FAMILY_ALBUM],
+        )
+
     def close(self) -> None:
         return None
 
@@ -56,6 +69,35 @@ def _import_bed(services, content: bytes, *, dpi: int = 300, filename: str = "be
         )
         session.commit()
     return registered.scan_id
+
+
+def test_new_photo_metadata_defaults(client, app_bundle) -> None:
+    app, services = app_bundle
+    settings = client.get("/api/settings").json()
+    assert settings["default_visibility"] == ""
+    settings.update(default_album_id=FAMILY_ALBUM, default_visibility="archive")
+    assert client.put("/api/settings", json=settings).json()["default_visibility"] == "archive"
+    assert client.get("/api/settings").json()["default_visibility"] == "archive"
+    invalid = client.put("/api/settings", json={**settings, "default_visibility": "invalid"})
+    assert invalid.status_code == 422
+
+    scan_id = _import_bed(services, encode_png(make_bed()))
+    app.state.worker.process_available()
+    detected = client.get(f"/api/scans/{scan_id}").json()["regions"]
+    assert detected
+    assert all(r["album_id"] == FAMILY_ALBUM and r["visibility"] == "archive" for r in detected)
+    manual = client.post(
+        f"/api/scans/{scan_id}/regions",
+        json={"center_x": 200, "center_y": 200, "width": 120, "height": 80, "angle_deg": 0},
+    )
+    assert manual.status_code == 201
+    assert manual.json()["album_id"] == FAMILY_ALBUM
+    assert manual.json()["visibility"] == "archive"
+
+    settings.update(default_album_id="", default_visibility="hidden")
+    client.put("/api/settings", json=settings)
+    unchanged = client.get(f"/api/scans/{scan_id}").json()["regions"]
+    assert all(r["album_id"] == FAMILY_ALBUM and r["visibility"] == "archive" for r in unchanged)
 
 
 def test_pipeline_detects_reviews_and_uploads(client, app_bundle) -> None:
@@ -115,6 +157,15 @@ def test_pipeline_detects_reviews_and_uploads(client, app_bundle) -> None:
     assert gateway.updates[0][1].description == "Teta Máňa 📷"
     assert gateway.updates[0][1].is_favorite is True
     assert gateway.updates[0][1].latitude == 41.0
+    reopened = client.get(f"/api/scans/{scan_id}").json()["regions"][0]
+    assert reopened["description"] == "Teta Máňa 📷"
+    assert reopened["visibility"] == "archive"
+    refreshed = client.post(f"/api/scans/{scan_id}/regions/{region_id}/refresh-immich")
+    assert refreshed.status_code == 200
+    assert refreshed.json()["description"] == "From Immich"
+    assert refreshed.json()["visibility"] == "hidden"
+    assert refreshed.json()["album_id"] == FAMILY_ALBUM
+    assert refreshed.json()["metadata_synced"] is True
 
     archived = client.get("/api/scans", params={"state": "uploaded"}).json()
     assert archived[0]["id"] == scan_id

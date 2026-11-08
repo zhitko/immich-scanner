@@ -49,6 +49,11 @@ def test_client_matches_the_v3_asset_contract() -> None:
     assert stored["isFavorite"] is True
     assert stored["visibility"] == "archive"
     assert created.id in STORE.albums[FAMILY_ALBUM]["assetIds"]
+    details = client.get_asset(created.id)
+    assert details.metadata.description == "Aunt Mae"
+    assert details.metadata.visibility == "archive"
+    assert details.metadata.latitude == 41.0
+    assert details.album_ids == [FAMILY_ALBUM]
     client.close()
 
 

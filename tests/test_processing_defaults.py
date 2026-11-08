@@ -96,6 +96,54 @@ def test_processing_defaults_apply_to_new_photos_and_preserve_existing_choices(
 
 
 @pytest.mark.parametrize("view", ["photos", "scans"])
+def test_open_defaults_apply_default_album_to_unuploaded_photos(client, app_bundle, view):
+    app, services = app_bundle
+    scan_id = _import_bed(services, encode_png(make_bed()))
+    assert app.state.worker.process_available() == 1
+    photo_id = client.get(f"/api/scans/{scan_id}").json()["regions"][0]["id"]
+
+    settings = client.get("/api/settings").json()
+    settings["default_album_id"] = "11111111-1111-4111-8111-111111111111"
+    saved = client.put("/api/settings", json=settings)
+    assert saved.status_code == 200
+    assert saved.json()["default_album_id"] == settings["default_album_id"]
+    assert client.get("/api/settings").json()["default_album_id"] == settings["default_album_id"]
+
+    target_id = photo_id if view == "photos" else scan_id
+    opened = client.get(f"/api/{view}/{target_id}", params={"apply_defaults": True})
+    assert opened.status_code == 200
+    region = next(item for item in opened.json()["regions"] if item["id"] == photo_id)
+    assert region["album_id"] == settings["default_album_id"]
+
+    reopened = client.get(f"/api/photos/{photo_id}").json()["regions"][0]
+    assert reopened["album_id"] == settings["default_album_id"]
+
+
+@pytest.mark.parametrize("view", ["photos", "scans"])
+@pytest.mark.parametrize(
+    "asset_id, visibility, expected",
+    [(None, None, "archive"), (None, "hidden", "hidden"), ("uploaded", None, None)],
+)
+def test_open_visibility_default(client, app_bundle, view, asset_id, visibility, expected):
+    app, services = app_bundle
+    scan_id = _import_bed(services, encode_png(make_bed()))
+    app.state.worker.process_available()
+    photo_id = client.get(f"/api/scans/{scan_id}").json()["regions"][0]["id"]
+    with services.session_factory() as session:
+        region = session.get(Region, photo_id)
+        region.immich_asset_id = asset_id
+        region.visibility = visibility
+        session.commit()
+    assert client.put("/api/settings", json={"default_visibility": "archive"}).status_code == 200
+    target_id = photo_id if view == "photos" else scan_id
+    opened = client.get(f"/api/{view}/{target_id}?apply_defaults=true")
+    assert opened.status_code == 200
+    photo = next(item for item in opened.json()["regions"] if item["id"] == photo_id)
+    assert photo["visibility"] == expected
+    assert client.get(f"/api/photos/{photo_id}").json()["regions"][0]["visibility"] == expected
+
+
+@pytest.mark.parametrize("view", ["photos", "scans"])
 @pytest.mark.parametrize(
     "status, path, signature, refresh",
     [

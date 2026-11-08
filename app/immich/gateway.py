@@ -36,6 +36,12 @@ class AssetMetadata:
     visibility: str | None = None
 
 
+@dataclass(frozen=True)
+class AssetDetails:
+    metadata: AssetMetadata
+    album_ids: list[str]
+
+
 class ImmichError(Exception):
     """Immich rejected a call or could not be reached."""
 
@@ -55,6 +61,9 @@ class ImmichGateway(Protocol):
 
     def update_asset(self, asset_id: str, metadata: AssetMetadata) -> None:
         """Write description, date, rating, favorite, and location."""
+
+    def get_asset(self, asset_id: str) -> AssetDetails:
+        """Read asset metadata and its album memberships."""
 
     def close(self) -> None:
         """Release the underlying HTTP client when this gateway owns one."""

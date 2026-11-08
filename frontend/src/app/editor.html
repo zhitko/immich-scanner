@@ -612,20 +612,30 @@
                       (input)="updateDraft('description', $any($event.target).value)"
                     ></textarea>
                   </label>
-                  <label>
+                  <label for="photo-album">
                     Album
-                    <select
-                      [value]="draft.albumId"
-                      (change)="updateDraft('albumId', $any($event.target).value)"
-                    >
-                      <option value="">No album</option>
-                      @for (album of albums(); track album.id) {
-                        <option [value]="album.id">{{ album.name }}</option>
-                      }
-                      @if (draft.albumId && !knownAlbum(draft.albumId)) {
-                        <option [value]="draft.albumId">{{ draft.albumId }}</option>
-                      }
-                    </select>
+                    @if (albumsLoaded()) {
+                      <select
+                        id="photo-album"
+                        (change)="updateDraft('albumId', $any($event.target).value)"
+                      >
+                        <option value="" [selected]="draft.albumId === ''">No album</option>
+                        @for (album of albums(); track album.id) {
+                          <option [value]="album.id" [selected]="draft.albumId === album.id">
+                            {{ album.name }}
+                          </option>
+                        }
+                        @if (draft.albumId && !knownAlbum(draft.albumId)) {
+                          <option [value]="draft.albumId" [selected]="true">
+                            {{ draft.albumId }}
+                          </option>
+                        }
+                      </select>
+                    } @else {
+                      <select id="photo-album" disabled>
+                        <option>Loading albums…</option>
+                      </select>
+                    }
                   </label>
                   <div class="pair">
                     <label>
@@ -699,6 +709,11 @@
                     >
                       {{ uploadLabel(region) }}
                     </button>
+                    @if (region.immich_asset_id) {
+                      <button type="button" (click)="refreshImmich()" [disabled]="busy() || uploading()">
+                        Refresh from Immich
+                      </button>
+                    }
                     @if (scan.regions.length > 1) {
                       <button
                         type="button"
@@ -713,6 +728,8 @@
                   </div>
                   <p class="muted small">
                     Stored on this computer. Immich is updated only when you upload this photo.
+                    Refresh replaces local details with Immich's current values. If the photo belongs
+                    to multiple albums, one album is shown here.
                   </p>
                 </form>
               </div>

@@ -15,6 +15,7 @@ describe('ArchiveApi', () => {
     output_format: 'jpeg',
     jpeg_quality: 95,
     default_album_id: '',
+    default_visibility: '',
     device_name: '',
     resolution_dpi: 300,
     scan_format: 'tiff',

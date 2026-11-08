@@ -12,6 +12,7 @@ export class SettingsPage {
 
   readonly settings = signal<Settings | null>(null);
   readonly albums = signal<Album[]>([]);
+  readonly albumsLoaded = signal(false);
   readonly devices = signal<ScannerDevice[]>([]);
   readonly scannerFound = signal<boolean | null>(null);
   readonly scannerMessage = signal('');
@@ -61,6 +62,10 @@ export class SettingsPage {
     if (key === 'immich_base_url' || key === 'immich_api_key') {
       this.connection.set(null);
     }
+  }
+
+  setDefaultAlbum(value: string): void {
+    this.update('default_album_id', value.trim());
   }
 
   knownAlbum(id: string): boolean {
@@ -340,8 +345,14 @@ export class SettingsPage {
 
   private loadAlbums(): void {
     this.api.listAlbums().subscribe({
-      next: (albums) => this.albums.set(albums),
-      error: () => this.albums.set([]),
+      next: (albums) => {
+        this.albums.set(albums);
+        this.albumsLoaded.set(true);
+      },
+      error: () => {
+        this.albums.set([]);
+        this.albumsLoaded.set(true);
+      },
     });
   }
 }
