@@ -395,11 +395,6 @@
                     />
                     Restore contrast
                   </label>
-                  <p class="muted small">
-                    Correct color cast balances faded red or yellow prints. Restore contrast
-                    deepens washed-out blacks and restores highlights, including in black-and-white
-                    photos. Both run before colorization and need no model download.
-                  </p>
                   <label class="check">
                     <input
                       type="checkbox"
@@ -427,11 +422,6 @@
                     />
                     Denoise
                   </label>
-                  <p class="muted small">
-                    Upscale enlarges 4× with the detail-preserving model and does not denoise.
-                    Denoise uses the other network. On its own, that 4× result is resized back to
-                    this crop. With both on, that network runs once and the enlargement is kept.
-                  </p>
                   <label class="check">
                     <input
                       type="checkbox"
@@ -441,10 +431,6 @@
                     />
                     Restore faces
                   </label>
-                  <p class="muted small">
-                    Invents detail that was not on the print. Off unless you choose it, and the
-                    preview is marked as a reconstruction.
-                  </p>
                   <button
                     type="button"
                     (click)="runRetouch()"

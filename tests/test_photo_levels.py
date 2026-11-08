@@ -35,6 +35,27 @@ def test_flat_prints_are_not_amplified(correction) -> None:
     np.testing.assert_array_equal(correction(image), image)
 
 
+def test_contrast_balances_gradient_without_losing_texture() -> None:
+    # Repeated fine detail under a broad illumination gradient, with true black
+    # and white reference rows so a global stretch cannot fix the imbalance.
+    texture = np.tile(np.array([[-12], [12]]), (128, 512))
+    gray = np.clip(texture + np.linspace(55, 200, 512), 0, 255).astype(np.uint8)
+    gray[:2] = 0
+    gray[-2:] = 255
+    image = np.repeat(gray[:, :, None], 3, axis=2)
+    before = image.copy()
+    result = restore_contrast(image)
+    left, right = result[20:-20, 20:100, 0], result[20:-20, -100:-20, 0]
+    original_gap = gray[20:-20, -100:-20].mean() - gray[20:-20, 20:100].mean()
+    assert right.mean() - left.mean() < original_gap * 0.8
+    assert np.mean(left[1::2].astype(float) - left[::2]) > 18
+    assert np.mean(right[1::2].astype(float) - right[::2]) > 18
+    np.testing.assert_array_equal(result[:2], image[:2])
+    np.testing.assert_array_equal(result[-2:], image[-2:])
+    np.testing.assert_array_equal(result[:, :, 0], result[:, :, 2])
+    np.testing.assert_array_equal(image, before)
+
+
 def test_levels_run_without_weights_and_report_progress(tmp_path) -> None:
     image = np.random.default_rng(42).integers(80, 220, (64, 64, 3), dtype=np.uint8)
     options = RetouchOptions(color_balance=True, contrast=True)

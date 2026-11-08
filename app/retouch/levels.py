@@ -41,12 +41,13 @@ def correct_color_cast(image: np.ndarray) -> np.ndarray:
 
 
 def restore_contrast(image: np.ndarray) -> np.ndarray:
-    """Expand faded black/white levels using one shared RGB curve.
+    """Expand faded levels with smoothly varying, shared RGB corrections.
 
     Half-percent tails ignore dust; a little headroom keeps highlight detail.
-    Full-range and nearly flat scans are left alone. Limiting the expansion to
-    4x avoids turning small paper variations into extreme contrast. A shared
-    curve keeps grayscale neutral and does not independently rebalance colors.
+    Compress broad illumination differences after stretching the levels, lifting
+    shaded areas and holding back bright ones. Correction fades at black/white
+    and is capped to retain natural lighting and avoid harsh halos. Nearly flat
+    scans are left alone; shared RGB adjustments keep grayscale neutral.
     """
     gray = cv2.cvtColor(_sample(image), cv2.COLOR_RGB2GRAY)
     low, high = np.percentile(gray, (0.5, 99.5))
@@ -59,4 +60,23 @@ def restore_contrast(image: np.ndarray) -> np.ndarray:
     target_midpoint = (target_low + target_high) / 2
     values = np.arange(256, dtype=np.float32)
     lut = np.rint(np.clip((values - midpoint) * gain + target_midpoint, 0, 255))
-    return cv2.LUT(image, lut.astype(np.uint8))
+    stretched = cv2.LUT(image, lut.astype(np.uint8))
+    # Estimate illumination at bounded resolution; a broad blur ignores grain
+    # and small features. Scaling the radius with the image makes this DPI-independent.
+    sample = cv2.cvtColor(_sample(stretched), cv2.COLOR_RGB2GRAY).astype(np.float32)
+    base = cv2.GaussianBlur(sample, (0, 0), max(1, min(sample.shape) / 8))
+    correction = np.clip((127.5 - base) * 0.6, -32, 32)
+    # Apply in strips to bound temporary RGB float allocations on large scans.
+    height, width = image.shape[:2]
+    correction = cv2.resize(correction, (width, height), interpolation=cv2.INTER_LINEAR)
+    result = np.empty_like(image)
+    for start in range(0, height, 128):
+        rows = slice(start, start + 128)
+        pixels = stretched[rows].astype(np.float32)
+        # Fade using RGB extrema so even saturated colors remain in gamut with
+        # a shared additive adjustment (preserving channel differences).
+        headroom = np.minimum(pixels.min(axis=2), 255 - pixels.max(axis=2)) / 255
+        weight = 4 * headroom * (1 - headroom)
+        corrected = pixels + (correction[rows] * weight)[:, :, None]
+        result[rows] = np.rint(np.clip(corrected, 0, 255)).astype(np.uint8)
+    return result
