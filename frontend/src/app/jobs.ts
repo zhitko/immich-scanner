@@ -37,6 +37,9 @@ export class JobsPage {
   }
 
   typeLabel(type: string): string {
+    if (type === 'match') {
+      return 'Match photos';
+    }
     if (type === 'detect') {
       return 'Find photos';
     }

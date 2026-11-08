@@ -75,6 +75,42 @@ To serve the built UI from the API instead of `ng serve`, run `npm run build` in
 
 ## Review UI
 
+### Find related photos and copy metadata
+
+Open **Matching** and choose **Index photos & find matches**. The background job indexes all
+locally available scanned photos, including photos already uploaded to Immich. Its persistent
+index is reused on later runs; new photos and changed crops are indexed again. Photos whose
+local files were removed, unreadable images, and blank images are skipped with a count and
+sample reasons. Matching runs on the same queue as detection, retouch, and upload; progress
+survives leaving the page and the worker resumes interrupted jobs after a restart.
+
+The matcher compares local color, coarse layout, and edge texture in all four rotations.
+It needs no model download or external service. **Balanced** is the default; **Strict** reduces
+suggestions and **Broader** includes weaker visual matches. It offers up to three source photos
+per target, ordered by visual similarity. This is a heuristic for finding possible series,
+not face recognition, semantic scene understanding, or evidence of a shared date/event.
+Photos from the same occasion can look different, and unrelated photos can look similar.
+
+Each suggestion shows the source and matched photo side by side. **Copy** transfers one missing
+field: date taken, description, album, location (both coordinates together), favorite, rating,
+or visibility. Existing target values are shown with a **Replace** button to explicitly overwrite
+that field with the source value; **Copy** still fills only missing fields. Favorite is
+offered only from a favorited source to a non-favorited target. A changed source or target is
+rejected until the suggestions are refreshed. All copying is explicit and saved locally;
+use the photo's normal **Upload to Immich** action to sync copied metadata. **Not a match**
+dismisses that directed pair across future runs. **Skip**, at the bottom of each card, also
+dismisses the pair without copying any more values. Run matching again after adding photos or
+metadata to discover new suggestions. The page covers photos scanned in this app, not the
+rest of an Immich library.
+
+API: `POST /api/matching/run` (`minimum_score`, default `0.82`), `GET /api/matching/status`,
+`GET /api/matching/pairs?offset=0&limit=20`, and
+`POST /api/matching/pairs/{source_id}/{target_id}/copy` or `/dismiss`. Copy accepts `field`,
+`source_updated_at`, and `target_updated_at` from the reviewed pair, plus optional `replace: true`
+to overwrite the selected field. Replacement uses the same revision checks. Concurrent run requests
+reuse the active matching job. The index and review state live in SQLite and are removed
+when their photo records are deleted.
+
 ### Photo cleanup
 
 Retouch controls are available per photo, with defaults under Settings → Processing:
@@ -105,7 +141,8 @@ The desk is one Angular app:
 - **Upload to Immich**, on the open photo, writes a full-resolution JPEG (quality from settings, default 95, 4:4:4) or a PNG, then creates the Immich asset, adds it to the album, and updates the metadata. The toolbar button does the same for every photo that still needs an upload. A failed photo can be retried. If the crop changed after a successful upload, the next upload creates a new asset and leaves the previous one in Immich. The date is written into EXIF at upload time.
 - Each photo can be retouched before that upload. **Preview** is the original crop. **Retouched** shows the retouched image once it is current, whichever version is set to upload, along with the choice of what is sent and the stages for that photo. Original is one click away. Retouch uses the saved crop, so save crop edits first. Face restoration is off unless chosen, and that preview is labeled as a reconstruction.
 - **Uploaded** keeps the history, including Immich asset ids, and can delete the original scan file to free disk space.
-- **Jobs** shows queued, running, finished, and failed detection, retouch, and upload work.
+- **Matching** finds visually related scanned photos and lets you copy individual missing metadata fields after reviewing each pair.
+- **Jobs** shows queued, running, finished, and failed detection, retouch, matching, and upload work.
 - **Statistics** summarizes all saved scans and photos, current upload statuses, metadata coverage (dates, descriptions, albums, locations, ratings, and favorites), and collection dates. Retouch statistics count photos with a completed result and the steps used in each photo's latest completed retouch, including older results; merely selecting a step does not count. A photo can count toward several steps. Counts include records whose local files were cleaned up, but not permanently deleted records. Refresh the page totals after new work. Available through `GET /api/statistics` as well.
 - **Settings** stores the scanner window, the default retouch stages for a new photo, and the Immich URL and API key. It tests the connection and lists albums. The same page shows each retouch model, its version, and a download, update, or redownload when this app is allowed to fetch that file. The card shows how much of the file has arrived.
 

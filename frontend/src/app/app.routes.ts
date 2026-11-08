@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 
 import { EditorPage } from './editor';
 import { JobsPage } from './jobs';
+import { MatchingPage } from './matching';
 import { PhotoListPage } from './photo-list';
 import { ScanListPage } from './scan-list';
 import { SettingsPage } from './settings-page';
@@ -12,6 +13,7 @@ export const routes: Routes = [
   { path: 'scans', component: ScanListPage },
   { path: 'scans/:id', component: EditorPage },
   { path: 'photos', component: PhotoListPage },
+  { path: 'matching', component: MatchingPage },
   { path: 'photos/:id', component: EditorPage, data: { photo: true } },
   { path: 'uploaded', pathMatch: 'full', redirectTo: '/scans?status=uploaded' },
   { path: 'jobs', component: JobsPage },

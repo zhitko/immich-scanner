@@ -92,6 +92,42 @@ export interface Photo extends Region {
   dpi: number | null;
 }
 
+export type MatchField =
+  | 'taken_at'
+  | 'description'
+  | 'album_id'
+  | 'location'
+  | 'is_favorite'
+  | 'rating'
+  | 'visibility';
+
+export interface PhotoMatch {
+  source: Photo;
+  target: Photo;
+  score: number;
+  fields: MatchField[];
+}
+
+export interface PhotoMatches {
+  items: PhotoMatch[];
+  total: number;
+}
+
+export interface MatchingStatus {
+  job: Job | null;
+  progress: {
+    minimum_score: number;
+    phase?: 'indexing' | 'matching' | 'finished';
+    total?: number;
+    processed?: number;
+    indexed?: number;
+    reused?: number;
+    skipped?: number;
+    pairs?: number;
+    warnings?: string[];
+  } | null;
+}
+
 export interface ScanSummary {
   id: string;
   created_at: string;

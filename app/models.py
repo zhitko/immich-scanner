@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, UtcDateTime
@@ -105,3 +105,28 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(String(128), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
+
+
+class PhotoIndex(Base):
+    __tablename__ = "photo_index"
+
+    region_id: Mapped[str] = mapped_column(
+        ForeignKey("regions.id", ondelete="CASCADE"), primary_key=True
+    )
+    signature: Mapped[str] = mapped_column(String(256))
+    features: Mapped[bytes] = mapped_column(LargeBinary)
+
+
+class PhotoMatch(Base):
+    __tablename__ = "photo_matches"
+
+    source_id: Mapped[str] = mapped_column(
+        ForeignKey("regions.id", ondelete="CASCADE"), primary_key=True
+    )
+    target_id: Mapped[str] = mapped_column(
+        ForeignKey("regions.id", ondelete="CASCADE"), primary_key=True
+    )
+    score: Mapped[float] = mapped_column(Float)
+    source_signature: Mapped[str] = mapped_column(String(256))
+    target_signature: Mapped[str] = mapped_column(String(256))
+    dismissed: Mapped[bool] = mapped_column(Boolean, default=False)

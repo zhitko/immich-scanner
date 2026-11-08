@@ -6,7 +6,11 @@ import {
   Album,
   ConnectionTest,
   Job,
+  MatchField,
+  MatchingStatus,
   Photo,
+  PhotoMatch,
+  PhotoMatches,
   PhotoFilter,
   Region,
   RegionGeometry,
@@ -27,6 +31,39 @@ export class ArchiveApi {
 
   getStatistics(): Observable<Statistics> {
     return this.http.get<Statistics>('/api/statistics');
+  }
+
+  matchingStatus(): Observable<MatchingStatus> {
+    return this.http.get<MatchingStatus>('/api/matching/status');
+  }
+
+  runMatching(minimumScore: number): Observable<{ job_id: string }> {
+    return this.http.post<{ job_id: string }>('/api/matching/run', {
+      minimum_score: minimumScore,
+    });
+  }
+
+  matchingPairs(offset: number, limit: number): Observable<PhotoMatches> {
+    return this.http.get<PhotoMatches>('/api/matching/pairs', { params: { offset, limit } });
+  }
+
+  copyMatchField(pair: PhotoMatch, field: MatchField, replace = false): Observable<Photo> {
+    return this.http.post<Photo>(`/api/matching/pairs/${pair.source.id}/${pair.target.id}/copy`, {
+      field,
+      ...(replace ? { replace: true } : {}),
+      source_updated_at: pair.source.updated_at,
+      target_updated_at: pair.target.updated_at,
+    });
+  }
+
+  dismissMatch(pair: PhotoMatch): Observable<void> {
+    return this.http
+      .post(
+        `/api/matching/pairs/${pair.source.id}/${pair.target.id}/dismiss`,
+        {},
+        { responseType: 'text' },
+      )
+      .pipe(map(() => undefined));
   }
 
   listScans(state: 'open' | 'uploaded' | 'all'): Observable<ScanSummary[]> {

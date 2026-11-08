@@ -5,6 +5,7 @@ from sqlalchemy import select, update
 
 from app.clock import utcnow
 from app.jobs.handlers import handle_detect, handle_upload
+from app.matching import handle_matching
 from app.models import Job
 from app.retouch.job import abandon_retouch, handle_retouch
 from app.runtime import Services
@@ -17,6 +18,7 @@ HANDLERS = {
     "detect": handle_detect,
     "upload": handle_upload,
     "retouch": handle_retouch,
+    "match": handle_matching,
 }
 
 

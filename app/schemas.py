@@ -99,6 +99,36 @@ class PhotoOut(RegionOut):
     dpi: int | None
 
 
+MatchField = Literal[
+    "taken_at", "description", "album_id", "location", "is_favorite", "rating", "visibility"
+]
+
+
+class MatchingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    minimum_score: float = Field(default=0.82, ge=0.5, le=0.99)
+
+
+class MatchCopyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    field: MatchField
+    replace: bool = False
+    source_updated_at: datetime
+    target_updated_at: datetime
+
+
+class PhotoMatchOut(BaseModel):
+    source: PhotoOut
+    target: PhotoOut
+    score: float
+    fields: list[MatchField]
+
+
+class PhotoMatchesOut(BaseModel):
+    items: list[PhotoMatchOut]
+    total: int
+
+
 class ScanSummary(BaseModel):
     id: str
     created_at: datetime

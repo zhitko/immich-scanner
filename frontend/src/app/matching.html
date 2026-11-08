@@ -1,0 +1,273 @@
+<section class="panel">
+  <div class="section-head">
+    <div>
+      <h2>Photo matching</h2>
+      <p class="lede">
+        Find photos that may belong to the same series and fill in missing details.
+      </p>
+    </div>
+    <button
+      type="button"
+      (click)="run()"
+      [disabled]="busy() || !!saving() || !status() || !!statusError()"
+    >
+      {{ busy() ? 'Matching in progress…' : 'Index photos & find matches' }}
+    </button>
+  </div>
+  <div class="matching-options">
+    <label for="match-threshold">Minimum visual similarity</label>
+    <select
+      id="match-threshold"
+      [ngModel]="minimumScore()"
+      (ngModelChange)="minimumScore.set($event)"
+      [disabled]="busy()"
+    >
+      <option [ngValue]="0.9">Strict · 90</option>
+      <option [ngValue]="0.82">Balanced · 82</option>
+      <option [ngValue]="0.7">Broader · 70</option>
+    </select>
+    <button
+      class="ghost"
+      type="button"
+      (click)="loadPairs(); refreshStatus()"
+      [disabled]="loading() || !!saving()"
+    >
+      Refresh
+    </button>
+  </div>
+  <p class="muted small">
+    Indexes all locally available scanned photos, including uploaded photos. Uses color, layout, and
+    texture to suggest up to three matches per photo. Similarity is a visual hint, not proof of the
+    same date or event. Review each pair before copying.
+  </p>
+  @if (error() || statusError() || pairsError()) {
+    <p class="banner warn" role="alert">{{ error() || statusError() || pairsError() }}</p>
+  }
+  @if (notice()) {
+    <p class="banner" role="status">{{ notice() }}</p>
+  }
+  @if (status()?.job; as job) {
+    <div class="matching-progress" aria-live="polite">
+      @if (job.status === 'queued') {
+        <p>
+          Matching queued. It will start after earlier jobs finish.
+          <a routerLink="/jobs">View jobs</a>
+        </p>
+      } @else if (job.status === 'running') {
+        <p>
+          {{
+            status()?.progress?.phase === 'matching' ? 'Finding similar photos' : 'Indexing photos'
+          }}… {{ status()?.progress?.processed ?? 0 }} /
+          {{
+            status()?.progress?.phase === 'matching'
+              ? status()?.progress?.indexed
+              : status()?.progress?.total
+          }}
+        </p>
+        <progress
+          aria-label="Matching progress"
+          [value]="status()?.progress?.processed ?? 0"
+          [max]="
+            (status()?.progress?.phase === 'matching'
+              ? status()?.progress?.indexed
+              : status()?.progress?.total) || 1
+          "
+        ></progress>
+      } @else if (job.status === 'failed') {
+        <p class="banner warn" role="alert">
+          Matching failed: {{ job.error }}. You can run it again.
+        </p>
+      } @else {
+        <p class="muted small">
+          Last run: {{ formatStamp(job.finished_at) }} ·
+          {{ status()?.progress?.indexed ?? 0 }} indexed ·
+          {{ status()?.progress?.reused ?? 0 }} reused ·
+          {{ status()?.progress?.skipped ?? 0 }} skipped ·
+          {{ status()?.progress?.pairs ?? 0 }} pairs found.
+        </p>
+      }
+      @if (status()?.progress?.skipped) {
+        <details>
+          <summary>{{ status()?.progress?.skipped }} photos could not be indexed</summary>
+          <p class="muted small">
+            Removed files, unreadable images, and photos without enough visual detail are skipped.
+            First few reasons:
+          </p>
+          <ul>
+            @for (warning of status()?.progress?.warnings ?? []; track $index) {
+              <li>{{ warning }}</li>
+            }
+          </ul>
+        </details>
+      }
+    </div>
+  }
+
+  @if (loading() && !results()) {
+    <p class="muted">Loading suggestions…</p>
+  } @else if (results(); as results) {
+    @if (!results.total) {
+      <p class="empty">
+        {{
+          !status()?.job
+            ? 'Run matching to find suggestions. Add a date or description to at least one photo first.'
+            : busy()
+              ? 'Suggestions will appear when matching finishes.'
+              : 'No suggestions to review. Add metadata, try a broader similarity setting, or scan more photos, then run matching again.'
+        }}
+      </p>
+    } @else {
+      <div class="section-head">
+        <p class="muted">
+          {{ results.total }} pairs to review. Copy fills missing fields; Replace overwrites an
+          existing value with the source value.
+        </p>
+        <div class="matching-options" aria-label="Suggestion pages">
+          <button
+            type="button"
+            class="ghost"
+            (click)="page(-1)"
+            [disabled]="offset() === 0 || loading() || !!saving()"
+          >
+            Previous
+          </button>
+          <span
+            >{{ offset() + 1 }}–{{ offset() + results.items.length }} of {{ results.total }}</span
+          >
+          <button
+            type="button"
+            class="ghost"
+            (click)="page(1)"
+            [disabled]="offset() + pageSize >= results.total || loading() || !!saving()"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+      <div class="match-list" [attr.aria-busy]="loading()">
+        @for (pair of results.items; track key(pair)) {
+          <article class="match-card">
+            <div class="section-head">
+              <h3>Possible series · similarity {{ score(pair) }} / 100</h3>
+              <button
+                type="button"
+                class="ghost"
+                (click)="dismiss(pair)"
+                [disabled]="!!saving() || loading() || busy()"
+              >
+                Not a match
+              </button>
+            </div>
+            <div class="match-photos">
+              @for (photo of [pair.source, pair.target]; track photo.id; let first = $first) {
+                <div class="match-photo">
+                  <p>
+                    <strong>{{
+                      first ? 'Source · existing metadata' : 'Matched photo · missing metadata'
+                    }}</strong>
+                  </p>
+                  <a
+                    class="match-preview"
+                    [routerLink]="['/photos', photo.id]"
+                    [attr.aria-label]="
+                      'Open ' + (first ? 'source' : 'matched') + ' photo ' + photo.position
+                    "
+                  >
+                    <div
+                      class="crop-ratio"
+                      [class.odd]="photo.quarter_turns % 2 === 1"
+                      [style.--aspect]="aspect(photo)"
+                      [style.--turns]="photo.quarter_turns % 4"
+                    >
+                      <img
+                        class="crop"
+                        [src]="previewUrl(photo)"
+                        [alt]="
+                          first
+                            ? 'Photo with existing metadata'
+                            : 'Similar photo with missing metadata'
+                        "
+                        loading="lazy"
+                      />
+                    </div>
+                  </a>
+                  <a [routerLink]="['/photos', photo.id]"
+                    >Photo {{ photo.position }} · scan {{ photo.scan_id.slice(0, 8) }}</a
+                  >
+                </div>
+              }
+            </div>
+            <div class="match-metadata">
+              @for (field of fields; track field) {
+                @if (value(pair.source, field); as sourceValue) {
+                  <div class="match-field">
+                    <div>
+                      <strong>{{ labels[field] }}</strong>
+                      <p class="metadata-value">{{ sourceValue }}</p>
+                    </div>
+                    <div class="match-action">
+                      @if (pair.fields.includes(field)) {
+                        <button
+                          type="button"
+                          (click)="copy(pair, field)"
+                          [attr.aria-label]="'Copy ' + labels[field] + ' to matched photo'"
+                          [disabled]="!!saving() || loading() || busy()"
+                        >
+                          {{ saving() === key(pair) + '/' + field ? 'Copying…' : 'Copy' }}
+                        </button>
+                      } @else {
+                        <span class="muted small"
+                          >Already set: {{ value(pair.target, field) }}</span
+                        >
+                        @if (valuesDiffer(pair, field)) {
+                          <button
+                            type="button"
+                            (click)="copy(pair, field, true)"
+                            [attr.aria-label]="'Replace ' + labels[field] + ' on matched photo'"
+                            [disabled]="!!saving() || loading() || busy()"
+                          >
+                            {{ saving() === key(pair) + '/' + field ? 'Replacing…' : 'Replace' }}
+                          </button>
+                        }
+                      }
+                    </div>
+                  </div>
+                }
+              }
+            </div>
+            <div class="match-card-actions">
+              <button
+                type="button"
+                class="ghost"
+                (click)="dismiss(pair, true)"
+                title="Skip this suggestion without copying more values. It stays hidden on future runs."
+                [disabled]="!!saving() || loading() || busy()"
+              >
+                {{ saving() === key(pair) + '/skip' ? 'Skipping…' : 'Skip' }}
+              </button>
+            </div>
+          </article>
+        }
+      </div>
+      <div class="matching-options matching-pagination-bottom" aria-label="Suggestion pages">
+        <button
+          type="button"
+          class="ghost"
+          (click)="page(-1)"
+          [disabled]="offset() === 0 || loading() || !!saving()"
+        >
+          Previous
+        </button>
+        <span>{{ offset() + 1 }}–{{ offset() + results.items.length }} of {{ results.total }}</span>
+        <button
+          type="button"
+          class="ghost"
+          (click)="page(1)"
+          [disabled]="offset() + pageSize >= results.total || loading() || !!saving()"
+        >
+          Next
+        </button>
+      </div>
+    }
+  }
+</section>
