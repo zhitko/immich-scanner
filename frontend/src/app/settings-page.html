@@ -172,6 +172,25 @@
 
       <fieldset class="group">
         <legend>Processing</legend>
+        <label class="check">
+          <input type="checkbox" [checked]="settings.retouch_dust"
+            (change)="setStep('retouch_dust', $any($event.target).checked)" />
+          Remove dust and small spots
+        </label>
+        <label class="check">
+          <input type="checkbox" [checked]="settings.retouch_gentle_denoise"
+            (change)="setStep('retouch_gentle_denoise', $any($event.target).checked)" />
+          Gentle denoise (native resolution)
+        </label>
+        <label class="check">
+          <input type="checkbox" [checked]="settings.retouch_deblur"
+            (change)="setStep('retouch_deblur', $any($event.target).checked)" />
+          Deblur mild softness
+        </label>
+        <p class="hint">
+          These stages need no model download. Dust removal targets tiny isolated marks;
+          deblur reduces mild defocus. Gentle denoise preserves more texture than strong AI denoise.
+        </p>
         <p class="hint">
           New photos start with these stages selected. Retouch still runs one photo at a time, and
           only when you ask for that photo. Photos already on a scan keep their own stages.
@@ -212,13 +231,14 @@
           />
           Colorize
         </label>
-        <label class="check">
-          <input
-            type="checkbox"
-            [checked]="settings.retouch_upscale"
-            (change)="setStep('retouch_upscale', $any($event.target).checked)"
-          />
-          Upscale
+        <label>
+          Output size
+          <select [value]="settings.retouch_upscale ? settings.retouch_output_scale : 1"
+            (change)="setOutputScale($any($event.target).value)">
+            <option value="1">1× — original size</option>
+            <option value="2">2× — AI upscale</option>
+            <option value="4">4× — AI upscale</option>
+          </select>
         </label>
         <label class="check">
           <input
@@ -226,11 +246,11 @@
             [checked]="settings.retouch_denoise"
             (change)="setStep('retouch_denoise', $any($event.target).checked)"
           />
-          Denoise
+          Strong AI denoise
         </label>
         <p class="hint">
-          Upscale enlarges 4× and does not denoise. Denoise on its own resizes the 4× denoising
-          network back to the crop. Both run that denoising network once and keep the enlargement.
+          AI enlargement runs a 4× network, then resizes to the selected output size.
+          Strong AI denoise uses its denoising network once, including at original output size.
         </p>
         <label class="check">
           <input

@@ -369,6 +369,24 @@
                 }
                 <div class="retouch-options">
                   <label class="check">
+                    <input type="checkbox" [checked]="region.retouch_dust"
+                      (change)="setRetouch('retouch_dust', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)" />
+                    Remove dust and small spots
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" [checked]="region.retouch_gentle_denoise"
+                      (change)="setRetouch('retouch_gentle_denoise', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)" />
+                    Gentle denoise (native resolution)
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" [checked]="region.retouch_deblur"
+                      (change)="setRetouch('retouch_deblur', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)" />
+                    Deblur mild softness
+                  </label>
+                  <label class="check">
                     <input
                       type="checkbox"
                       [checked]="region.retouch_scratches"
@@ -404,14 +422,15 @@
                     />
                     Colorize
                   </label>
-                  <label class="check">
-                    <input
-                      type="checkbox"
-                      [checked]="region.retouch_upscale"
-                      (change)="setRetouch('retouch_upscale', $any($event.target).checked)"
-                      [disabled]="busy() || retouchingRegion(region)"
-                    />
-                    Upscale
+                  <label>
+                    Output size
+                    <select [value]="region.retouch_upscale ? region.retouch_output_scale : 1"
+                      (change)="setOutputScale($any($event.target).value)"
+                      [disabled]="busy() || retouchingRegion(region)">
+                      <option value="1">1× — original size</option>
+                      <option value="2">2× — AI upscale</option>
+                      <option value="4">4× — AI upscale</option>
+                    </select>
                   </label>
                   <label class="check">
                     <input
@@ -420,7 +439,7 @@
                       (change)="setRetouch('retouch_denoise', $any($event.target).checked)"
                       [disabled]="busy() || retouchingRegion(region)"
                     />
-                    Denoise
+                    Strong AI denoise
                   </label>
                   <label class="check">
                     <input

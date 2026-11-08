@@ -24,6 +24,9 @@ export interface Statistics {
   retouched_scratches: number;
   retouched_color_balance: number;
   retouched_contrast: number;
+  retouched_dust: number;
+  retouched_deblur: number;
+  retouched_gentle_denoise: number;
   first_scan_at: string | null;
   latest_scan_at: string | null;
   earliest_photo_at: string | null;
@@ -64,6 +67,10 @@ export interface Region {
   retouch_scratches: boolean;
   retouch_color_balance: boolean;
   retouch_contrast: boolean;
+  retouch_dust: boolean;
+  retouch_deblur: boolean;
+  retouch_gentle_denoise: boolean;
+  retouch_output_scale: 2 | 4;
   upload_source: 'crop' | 'retouch';
   retouch_status: string;
   retouch_progress: number | null;
@@ -128,6 +135,10 @@ export interface Settings {
   retouch_scratches: boolean;
   retouch_color_balance: boolean;
   retouch_contrast: boolean;
+  retouch_dust: boolean;
+  retouch_deblur: boolean;
+  retouch_gentle_denoise: boolean;
+  retouch_output_scale: 2 | 4;
 }
 
 export interface ScannerDevice {
@@ -199,6 +210,10 @@ export interface RetouchChoice {
   scratches: boolean;
   color_balance: boolean;
   contrast: boolean;
+  dust: boolean;
+  deblur: boolean;
+  gentle_denoise: boolean;
+  output_scale: 2 | 4;
 }
 
 export interface RetouchPatch {
@@ -209,6 +224,10 @@ export interface RetouchPatch {
   retouch_scratches?: boolean;
   retouch_color_balance?: boolean;
   retouch_contrast?: boolean;
+  retouch_dust?: boolean;
+  retouch_deblur?: boolean;
+  retouch_gentle_denoise?: boolean;
+  retouch_output_scale?: 2 | 4;
   upload_source?: 'crop' | 'retouch';
 }
 

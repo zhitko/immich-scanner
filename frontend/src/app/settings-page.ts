@@ -104,10 +104,20 @@ export class SettingsPage {
       | 'retouch_colorize'
       | 'retouch_scratches'
       | 'retouch_color_balance'
-      | 'retouch_contrast',
+      | 'retouch_contrast'
+      | 'retouch_dust'
+      | 'retouch_deblur'
+      | 'retouch_gentle_denoise',
     checked: boolean,
   ): void {
     this.update(key, checked);
+  }
+
+  setOutputScale(value: string): void {
+    const scale = Number(value);
+    if (scale !== 1 && scale !== 2 && scale !== 4) return;
+    this.update('retouch_upscale', scale !== 1);
+    this.update('retouch_output_scale', scale === 2 ? 2 : 4);
   }
 
   modelStatus(model: RetouchModel): string {

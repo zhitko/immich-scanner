@@ -432,7 +432,10 @@ export class EditorPage {
       region.retouch_colorize ||
       region.retouch_scratches ||
       region.retouch_color_balance ||
-      region.retouch_contrast
+      region.retouch_contrast ||
+      region.retouch_dust ||
+      region.retouch_deblur ||
+      region.retouch_gentle_denoise
     );
   }
 
@@ -483,7 +486,10 @@ export class EditorPage {
       | 'retouch_colorize'
       | 'retouch_scratches'
       | 'retouch_color_balance'
-      | 'retouch_contrast',
+      | 'retouch_contrast'
+      | 'retouch_dust'
+      | 'retouch_deblur'
+      | 'retouch_gentle_denoise',
     checked: boolean,
   ): void {
     const scan = this.scan();
@@ -494,6 +500,18 @@ export class EditorPage {
     this.run(this.api.patchRegion(scan.id, region.id, { [flag]: checked }), (updated) =>
       this.replaceRegion(updated, true),
     );
+  }
+
+  setOutputScale(value: string): void {
+    const scan = this.scan();
+    const region = this.selected();
+    if (!scan || !region) return;
+    const scale = Number(value);
+    if (scale !== 1 && scale !== 2 && scale !== 4) return;
+    this.run(this.api.patchRegion(scan.id, region.id, {
+      retouch_upscale: scale !== 1,
+      retouch_output_scale: scale === 2 ? 2 : 4,
+    }), (updated) => this.replaceRegion(updated, true));
   }
 
   runRetouch(): void {
@@ -518,6 +536,10 @@ export class EditorPage {
         scratches: region.retouch_scratches,
         color_balance: region.retouch_color_balance,
         contrast: region.retouch_contrast,
+        dust: region.retouch_dust,
+        deblur: region.retouch_deblur,
+        gentle_denoise: region.retouch_gentle_denoise,
+        output_scale: region.retouch_output_scale,
       }),
       (result) => {
         this.replaceRegion(result.region, true);

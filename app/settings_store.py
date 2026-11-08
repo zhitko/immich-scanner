@@ -31,6 +31,10 @@ class ArchiveSettings:
     retouch_scratches: bool = False
     retouch_color_balance: bool = False
     retouch_contrast: bool = False
+    retouch_dust: bool = False
+    retouch_deblur: bool = False
+    retouch_gentle_denoise: bool = False
+    retouch_output_scale: int = 4
 
 
 def load_settings(session: Session) -> ArchiveSettings:
@@ -71,6 +75,10 @@ def load_settings(session: Session) -> ArchiveSettings:
         retouch_scratches=_flag(stored.get("retouch_scratches")),
         retouch_color_balance=_flag(stored.get("retouch_color_balance")),
         retouch_contrast=_flag(stored.get("retouch_contrast")),
+        retouch_dust=_flag(stored.get("retouch_dust")),
+        retouch_deblur=_flag(stored.get("retouch_deblur")),
+        retouch_gentle_denoise=_flag(stored.get("retouch_gentle_denoise")),
+        retouch_output_scale=2 if stored.get("retouch_output_scale") == "2" else 4,
     )
 
 
@@ -94,6 +102,10 @@ def save_settings(session: Session, settings: ArchiveSettings) -> None:
         "retouch_scratches": _format_flag(settings.retouch_scratches),
         "retouch_color_balance": _format_flag(settings.retouch_color_balance),
         "retouch_contrast": _format_flag(settings.retouch_contrast),
+        "retouch_dust": _format_flag(settings.retouch_dust),
+        "retouch_deblur": _format_flag(settings.retouch_deblur),
+        "retouch_gentle_denoise": _format_flag(settings.retouch_gentle_denoise),
+        "retouch_output_scale": str(settings.retouch_output_scale),
     }
     for key, value in values.items():
         row = session.get(Setting, key)
@@ -130,6 +142,10 @@ def seed_settings(session: Session, process: Settings) -> None:
         retouch_scratches=current.retouch_scratches,
         retouch_color_balance=current.retouch_color_balance,
         retouch_contrast=current.retouch_contrast,
+        retouch_dust=current.retouch_dust,
+        retouch_deblur=current.retouch_deblur,
+        retouch_gentle_denoise=current.retouch_gentle_denoise,
+        retouch_output_scale=current.retouch_output_scale,
     )
     if seeded != current or not session.get(Setting, "output_format"):
         save_settings(session, seeded)
@@ -157,7 +173,7 @@ def _optional_mm(raw: str) -> float | None:
     return value
 
 
-def retouch_columns(settings: ArchiveSettings) -> dict[str, bool]:
+def retouch_columns(settings: ArchiveSettings) -> dict[str, bool | int]:
     return {
         "retouch_upscale": settings.retouch_upscale,
         "retouch_denoise": settings.retouch_denoise,
@@ -166,6 +182,10 @@ def retouch_columns(settings: ArchiveSettings) -> dict[str, bool]:
         "retouch_scratches": settings.retouch_scratches,
         "retouch_color_balance": settings.retouch_color_balance,
         "retouch_contrast": settings.retouch_contrast,
+        "retouch_dust": settings.retouch_dust,
+        "retouch_deblur": settings.retouch_deblur,
+        "retouch_gentle_denoise": settings.retouch_gentle_denoise,
+        "retouch_output_scale": settings.retouch_output_scale,
     }
 
 

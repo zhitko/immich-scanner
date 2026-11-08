@@ -6,7 +6,10 @@ from app.models import Region
 
 # The denoise bit is optional. A saved token without it is the old combined
 # "upscale and denoise" step, so that bit follows the upscale bit.
-_TOKEN = re.compile(r"u([01])(?:d([01]))?f([01])c([01])s([01])(?:b([01])t([01]))?$")
+_TOKEN = re.compile(
+    r"u([01])(?:d([01]))?f([01])c([01])s([01])(?:b([01])t([01]))?"
+    r"(?:p([01])r([01])g([01])x([24]))?$"
+)
 _RETOUCH_MARKER = "|retouch|"
 
 
@@ -19,6 +22,10 @@ class RetouchOptions:
     scratches: bool = False
     color_balance: bool = False
     contrast: bool = False
+    dust: bool = False
+    deblur: bool = False
+    gentle_denoise: bool = False
+    output_scale: int = 4
 
     def any_selected(self) -> bool:
         return any(
@@ -30,6 +37,9 @@ class RetouchOptions:
                 self.scratches,
                 self.color_balance,
                 self.contrast,
+                self.dust,
+                self.deblur,
+                self.gentle_denoise,
             )
         )
 
@@ -43,10 +53,22 @@ def options_from_region(region: Region) -> RetouchOptions:
         scratches=bool(region.retouch_scratches),
         color_balance=bool(region.retouch_color_balance),
         contrast=bool(region.retouch_contrast),
+        dust=bool(region.retouch_dust),
+        deblur=bool(region.retouch_deblur),
+        gentle_denoise=bool(region.retouch_gentle_denoise),
+        output_scale=(region.retouch_output_scale or 4) if region.retouch_upscale else 4,
     )
 
 
 def option_token(options: RetouchOptions) -> str:
+    extra = ""
+    if options.dust or options.deblur or options.gentle_denoise or (
+        options.upscale and options.output_scale != 4
+    ):
+        extra = (
+            f"p{int(options.dust)}r{int(options.deblur)}g{int(options.gentle_denoise)}"
+            f"x{options.output_scale if options.upscale else 4}"
+        )
     return (
         f"u{int(options.upscale)}"
         f"d{int(options.denoise)}"
@@ -55,6 +77,7 @@ def option_token(options: RetouchOptions) -> str:
         f"s{int(options.scratches)}"
         f"b{int(options.color_balance)}"
         f"t{int(options.contrast)}"
+        f"{extra}"
     )
 
 
@@ -72,6 +95,10 @@ def options_from_token(token: str) -> RetouchOptions | None:
         scratches=match.group(5) == "1",
         color_balance=match.group(6) == "1",
         contrast=match.group(7) == "1",
+        dust=match.group(8) == "1",
+        deblur=match.group(9) == "1",
+        gentle_denoise=match.group(10) == "1",
+        output_scale=int(match.group(11) or 4),
     )
 
 

@@ -33,6 +33,9 @@ class StatisticsOut(BaseModel):
     retouched_scratches: int
     retouched_color_balance: int
     retouched_contrast: int
+    retouched_dust: int
+    retouched_deblur: int
+    retouched_gentle_denoise: int
     first_scan_at: datetime | None
     latest_scan_at: datetime | None
     earliest_photo_at: datetime | None
@@ -73,6 +76,10 @@ class RegionOut(BaseModel):
     retouch_scratches: bool
     retouch_color_balance: bool
     retouch_contrast: bool
+    retouch_dust: bool
+    retouch_deblur: bool
+    retouch_gentle_denoise: bool
+    retouch_output_scale: Literal[2, 4]
     upload_source: Literal["crop", "retouch"]
     retouch_status: str
     retouch_progress: int | None = None
@@ -137,6 +144,10 @@ class RegionPatch(BaseModel):
     retouch_scratches: bool | None = None
     retouch_color_balance: bool | None = None
     retouch_contrast: bool | None = None
+    retouch_dust: bool | None = None
+    retouch_deblur: bool | None = None
+    retouch_gentle_denoise: bool | None = None
+    retouch_output_scale: Literal[2, 4] | None = None
     upload_source: Literal["crop", "retouch"] | None = None
 
     @field_validator("album_id")
@@ -174,6 +185,10 @@ class RetouchRequest(BaseModel):
     scratches: bool = False
     color_balance: bool = False
     contrast: bool = False
+    dust: bool = False
+    deblur: bool = False
+    gentle_denoise: bool = False
+    output_scale: Literal[2, 4] = 4
 
     @model_validator(mode="after")
     def _one_stage(self) -> "RetouchRequest":
@@ -189,6 +204,9 @@ class RetouchRequest(BaseModel):
                 self.scratches,
                 self.color_balance,
                 self.contrast,
+                self.dust,
+                self.deblur,
+                self.gentle_denoise,
             )
         ):
             raise ValueError("Choose at least one retouch stage.")
@@ -262,6 +280,10 @@ class SettingsOut(BaseModel):
     retouch_scratches: bool
     retouch_color_balance: bool
     retouch_contrast: bool
+    retouch_dust: bool
+    retouch_deblur: bool
+    retouch_gentle_denoise: bool
+    retouch_output_scale: Literal[2, 4]
 
 
 class SettingsUpdate(BaseModel):
@@ -284,6 +306,10 @@ class SettingsUpdate(BaseModel):
     retouch_scratches: bool = False
     retouch_color_balance: bool = False
     retouch_contrast: bool = False
+    retouch_dust: bool = False
+    retouch_deblur: bool = False
+    retouch_gentle_denoise: bool = False
+    retouch_output_scale: Literal[2, 4] = 4
 
     @model_validator(mode="after")
     def _legacy_denoise(self) -> "SettingsUpdate":

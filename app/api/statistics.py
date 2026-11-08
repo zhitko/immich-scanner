@@ -67,7 +67,11 @@ def get_statistics(session: Session = Depends(get_session)) -> StatisticsOut:
     )
     retouches = {
         "retouched": 0,
-        **{f"retouched_{step}": 0 for step in RetouchOptions.__dataclass_fields__},
+        **{
+            f"retouched_{step}": 0
+            for step in RetouchOptions.__dataclass_fields__
+            if step != "output_scale"
+        },
     }
     # A signature is saved only after a successful retouch. Current switches may
     # describe a later edit or retry, so read the steps from the completed result.
@@ -81,6 +85,6 @@ def get_statistics(session: Session = Depends(get_session)) -> StatisticsOut:
         options = options_from_token(signature.rpartition("|")[2])
         if options is not None:
             for step in RetouchOptions.__dataclass_fields__:
-                if getattr(options, step):
+                if step != "output_scale" and getattr(options, step):
                     retouches[f"retouched_{step}"] += count
     return StatisticsOut(**scans, **photos, **retouches)

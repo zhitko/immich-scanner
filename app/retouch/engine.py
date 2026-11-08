@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 
 from app.retouch.catalog import CATALOG, ModelSpec, restoration_for, specs_for
+from app.retouch.cleanup import deblur, gentle_denoise, remove_dust
 from app.retouch.detection import learned_scratch_mask
 from app.retouch.imageops import (
     apply_ab,
@@ -81,6 +82,11 @@ class OnnxRetoucher:
         # Real-ESRGAN pass after that: both networks emit 4×, so a second pass
         # would enlarge twice. Faces run last and see the image that will be saved.
         result = image
+        if options.dust:
+            _announce(on_stage, "Removing dust and small spots")
+            result = remove_dust(result)
+            if budget is not None:
+                budget.add(1)
         if options.scratches:
             _announce(on_stage, "Detecting scratches")
             mask = learned_scratch_mask(self._session(CATALOG["scratch-detection"]), result)
@@ -98,6 +104,16 @@ class OnnxRetoucher:
                     mask,
                     on_tile=None if budget is None else lambda: budget.add(1),
                 )
+        if options.gentle_denoise:
+            _announce(on_stage, "Gently denoising")
+            result = gentle_denoise(result)
+            if budget is not None:
+                budget.add(1)
+        if options.deblur:
+            _announce(on_stage, "Reducing mild blur")
+            result = deblur(result)
+            if budget is not None:
+                budget.add(1)
         if options.color_balance:
             _announce(on_stage, "Correcting color cast")
             result = correct_color_cast(result)
@@ -123,6 +139,13 @@ class OnnxRetoucher:
                 denoise_strength=1.0 if options.denoise else 0.0,
                 on_tile=None if budget is None else lambda: budget.add(1),
             )
+        if options.upscale and options.output_scale == 2:
+            _announce(on_stage, "Resizing to 2×")
+            result = cv2.resize(
+                result, (image.shape[1] * 2, image.shape[0] * 2), interpolation=cv2.INTER_AREA
+            )
+            if budget is not None:
+                budget.add(1)
         if options.faces:
             _announce(on_stage, "Restoring faces")
             result = self._faces(
@@ -143,6 +166,8 @@ class OnnxRetoucher:
         if on_progress is None:
             return None
         total = 0
+        total += int(options.dust) + int(options.deblur) + int(options.gentle_denoise)
+        total += int(options.upscale and options.output_scale == 2)
         face_estimate = 0
         if options.scratches:
             total += _MASK_UNITS

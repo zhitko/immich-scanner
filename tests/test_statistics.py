@@ -101,6 +101,9 @@ def test_statistics_counts_photos_without_multiplying_scans(client, app_bundle) 
         "retouched_scratches": 0,
         "retouched_color_balance": 0,
         "retouched_contrast": 0,
+        "retouched_dust": 0,
+        "retouched_deblur": 0,
+        "retouched_gentle_denoise": 0,
         "first_scan_at": "2025-01-01T00:00:00Z",
         "latest_scan_at": "2026-11-01T00:00:00Z",
         "earliest_photo_at": "1999-06-12T00:00:00Z",
@@ -151,7 +154,7 @@ def test_statistics_retouch_counts_completed_results_not_selected_options(
         session.add(scan)
         session.flush()
         results = [
-            ("ready", "crop|u1d0f1c0s0b1t1"),
+            ("ready", "crop|u1d0f1c0s0b1t1p1r1g1x2"),
             ("stale", "crop|scratch-v4|u0d1f0c1s1b0t0"),
             ("failed", "crop|u1f0c0s0"),  # Legacy upscale included denoise.
             ("running", "crop|u1d0f1c0s0b1t1"),  # Earlier successful result.
@@ -198,6 +201,9 @@ def test_statistics_retouch_counts_completed_results_not_selected_options(
         "retouched_scratches": 1,
         "retouched_color_balance": 2,
         "retouched_contrast": 2,
+        "retouched_dust": 1,
+        "retouched_deblur": 1,
+        "retouched_gentle_denoise": 1,
     }
     assert client.delete("/api/scans/retouched").status_code == 204
     assert client.get("/api/statistics").json()["retouched"] == 0

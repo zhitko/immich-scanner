@@ -33,6 +33,9 @@ describe('StatisticsPage', () => {
     retouched_scratches: 0,
     retouched_color_balance: 0,
     retouched_contrast: 0,
+    retouched_dust: 0,
+    retouched_deblur: 0,
+    retouched_gentle_denoise: 0,
     first_scan_at: null,
     latest_scan_at: null,
     earliest_photo_at: null,
@@ -101,7 +104,7 @@ describe('StatisticsPage', () => {
     expect(fixture.componentInstance.error()).toBe('Request failed (503)');
   });
 
-  it('shows the completed retouch total and all seven step counts', () => {
+  it('shows the completed retouch total and all step counts', () => {
     const fixture = TestBed.createComponent(StatisticsPage);
     http.expectOne('/api/statistics').flush({
       ...empty,
@@ -130,6 +133,9 @@ describe('StatisticsPage', () => {
       ['Fill scratches', '2'],
       ['Correct color cast', '1'],
       ['Restore contrast', '3'],
+      ['Dust removal', '0'],
+      ['Deblur', '0'],
+      ['Gentle denoise', '0'],
       ['Colorize', '1'],
       ['Upscale', '2'],
       ['Denoise', '3'],

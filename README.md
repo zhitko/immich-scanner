@@ -75,6 +75,26 @@ To serve the built UI from the API instead of `ng serve`, run `npm run build` in
 
 ## Review UI
 
+### Photo cleanup
+
+Retouch controls are available per photo, with defaults under Settings → Processing:
+
+- **Remove dust and small spots:** repairs isolated high-contrast specks up to a few source pixels
+  across in quiet areas. Larger damage belongs to scratch repair. Review fine details at full size.
+- **Gentle denoise:** native-resolution non-local means, lightly blended with the source to retain
+  texture. No enlargement or model download is needed.
+- **Deblur mild softness:** bounded luminance deconvolution for mild defocus. It does not estimate
+  motion direction or reconstruct severely blurred detail.
+- **Output size:** original size (1×), 2×, or 4×. AI enlargement uses the existing 4× model and
+  downsizes for 2×; face restoration runs at the selected final size.
+- **Strong AI denoise:** the existing Real-ESRGAN denoising stage remains available. Use gentle
+  denoise alone for lighter cleanup; selecting both applies both filters.
+
+Dust removal runs before scratch repair; gentle denoise and deblur run next, before color/tone
+corrections and AI enlargement. All three new cleanup stages run locally without weights.
+Existing photos retain their saved processing choices; the database migration adds disabled
+cleanup switches and preserves the previous 4× enlargement default.
+
 The desk is one Angular app:
 
 - **Waiting** shows whether the scanner is reachable and scans the bed, with the elapsed time while it runs. "Open for review when done" jumps straight to the new scan. The list holds scans that are not fully uploaded and shows which ones are still being detected.
