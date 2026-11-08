@@ -117,7 +117,6 @@
               [style.--aspect]="frameAspect(photo)"
               (pointerdown)="hold('retouch', $event)"
               (pointerleave)="release()"
-              (contextmenu)="photo.retouch_ready && $event.preventDefault()"
             >
               @for (version of frameVersions(photo); track version) {
                 <img
@@ -338,7 +337,6 @@
                       [style.--aspect]="frameAspect(region)"
                       (pointerdown)="hold('retouch', $event)"
                       (pointerleave)="release()"
-                      (contextmenu)="region.retouch_ready && $event.preventDefault()"
                     >
                       @for (version of frameVersions(region); track version) {
                         <img
@@ -777,7 +775,6 @@
             tabindex="-1"
             (pointerdown)="hold('lightbox', $event)"
             (pointerleave)="release()"
-            (contextmenu)="photo.retouch_ready && $event.preventDefault()"
           >
             @for (version of frameVersions(photo); track version) {
               <img
