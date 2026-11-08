@@ -1,6 +1,6 @@
 <header class="top">
   <div class="top-inner">
-    <a class="brand" routerLink="/scans">
+    <a class="brand" routerLink="/scans" aria-label="Scanner desk">
       <span class="brand-mark" aria-hidden="true">
         <svg class="i" viewBox="0 0 24 24">
           <path
@@ -27,6 +27,12 @@
           <path d="m21 15-5-5L5 21" />
         </svg>
         <span>Photos</span>
+      </a>
+      <a routerLink="/retouch" routerLinkActive="active">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m3 17 11-11 4 4L7 21H3v-4ZM12 8l4 4M5 2v4M3 4h4M19 2v4M17 4h4" />
+        </svg>
+        <span>Retouch</span>
       </a>
       <a routerLink="/matching" routerLinkActive="active">
         <svg class="i" viewBox="0 0 24 24" aria-hidden="true">

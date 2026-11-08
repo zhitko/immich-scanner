@@ -261,6 +261,15 @@ export interface RetouchChoice {
   output_scale: 2 | 4;
 }
 
+export interface BulkRetouchSummary {
+  total: number;
+  eligible: number;
+  retouched: number;
+  busy: number;
+  unavailable: number;
+  queued: number;
+}
+
 export interface RetouchPatch {
   retouch_upscale?: boolean;
   retouch_denoise?: boolean;

@@ -1,0 +1,140 @@
+<section class="panel">
+  <div class="section-head">
+    <div>
+      <h2>Bulk retouch</h2>
+      <p class="lede">Apply the same retouch stages to photos across your scans.</p>
+    </div>
+    <a routerLink="/jobs">View jobs →</a>
+  </div>
+
+  @if (error()) {
+    <p class="banner warn" role="alert">{{ error() }}</p>
+  }
+  @if (notice()) {
+    <p class="banner" role="status">{{ notice() }}</p>
+  }
+
+  <div class="bulk-layout">
+    <fieldset class="bulk-options" [disabled]="starting()">
+      <legend>Retouch stages</legend>
+      <p class="muted small">
+        These choices replace the saved stages only for photos queued by this run.
+      </p>
+      @for (stage of stages; track stage.key) {
+        <label class="check">
+          <input
+            type="checkbox"
+            [checked]="choice()[stage.key]"
+            (change)="setStage(stage.key, $any($event.target).checked)"
+          />
+          {{ stage.label }}
+        </label>
+      }
+      <div class="field">
+        <label for="bulk-output-size">Output size</label>
+        <select
+          id="bulk-output-size"
+          [value]="choice().upscale ? choice().output_scale : 1"
+          (change)="setOutputScale($any($event.target).value)"
+        >
+          <option value="1">1× — original size</option>
+          <option value="2">2× — AI upscale</option>
+          <option value="4">4× — AI upscale</option>
+        </select>
+      </div>
+      @if (choice().faces) {
+        <p class="banner warn small">
+          Face restoration reconstructs details. Review the results before uploading.
+        </p>
+      }
+      <p class="muted small">
+        AI stages need their models installed under <a routerLink="/settings">Settings</a>.
+      </p>
+    </fieldset>
+
+    <div class="bulk-scope">
+      <fieldset class="bulk-options" [disabled]="starting()">
+        <legend>Photos to retouch</legend>
+        <div class="field">
+          <label for="bulk-upload-status">Upload status</label>
+          <select
+            id="bulk-upload-status"
+            [value]="state()"
+            (change)="chooseState($any($event.target).value)"
+          >
+            <option value="all">All photos</option>
+            <option value="open">Waiting for upload</option>
+            <option value="uploaded">Already uploaded</option>
+          </select>
+        </div>
+        <label class="check">
+          <input
+            type="checkbox"
+            [checked]="includeRetouched()"
+            (change)="setIncludeRetouched($any($event.target).checked)"
+          />
+          Retouch already retouched photos
+        </label>
+        <p class="muted small">
+          By default, photos with any previous result are skipped, including stale results.
+        </p>
+        @if (includeRetouched()) {
+          <p class="banner warn small">
+            Existing results will be replaced after each successful retouch. Processing starts from
+            the original saved crop.
+          </p>
+        }
+      </fieldset>
+
+      <div class="bulk-summary" aria-live="polite" [attr.aria-busy]="loading()">
+        @if (summaryError()) {
+          <p class="banner warn" role="alert">{{ summaryError() }}</p>
+        }
+        @if (summary(); as counts) {
+          <h3>{{ counts.eligible }} photos eligible</h3>
+          <p class="muted small">{{ counts.total }} photos in this upload status.</p>
+          <dl>
+            <div>
+              <dt>Previous result skipped</dt>
+              <dd>{{ counts.retouched }}</dd>
+            </div>
+            <div>
+              <dt>Queued, retouching, or uploading</dt>
+              <dd>{{ counts.busy }}</dd>
+            </div>
+            <div>
+              <dt>Source files unavailable</dt>
+              <dd>{{ counts.unavailable }}</dd>
+            </div>
+          </dl>
+        } @else if (loading()) {
+          <p class="muted">Counting photos…</p>
+        }
+        <button
+          type="button"
+          class="ghost"
+          (click)="refresh()"
+          [disabled]="loading() || starting()"
+        >
+          Refresh counts
+        </button>
+      </div>
+
+      @if (!hasStage()) {
+        <p class="muted small">Choose at least one stage or an AI output size to start.</p>
+      }
+      <button type="button" (click)="run()" [disabled]="!canRun()">
+        @if (starting()) {
+          <span class="spinner" aria-hidden="true"></span>Queuing photos…
+        } @else {
+          Retouch {{ summary()?.eligible ?? 0 }} photos
+        }
+      </button>
+      <p class="muted small">
+        Photos run one at a time in the background. You can leave this page. Counts are checked
+        again when you start. Successful results become the upload version; nothing is uploaded
+        automatically.
+      </p>
+    </div>
+  </div>
+</section>

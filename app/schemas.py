@@ -250,6 +250,22 @@ class RetouchRequest(BaseModel):
         return self
 
 
+class BulkRetouchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    choice: RetouchRequest
+    state: Literal["open", "uploaded", "all"] = "all"
+    include_retouched: bool = False
+
+
+class BulkRetouchSummary(BaseModel):
+    total: int = 0
+    eligible: int = 0
+    retouched: int = 0
+    busy: int = 0
+    unavailable: int = 0
+    queued: int = 0
+
+
 class RetouchQueued(BaseModel):
     job_id: str
     region: RegionOut

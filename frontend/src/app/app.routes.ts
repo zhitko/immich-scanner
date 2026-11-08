@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 
+import { BulkRetouchPage } from './bulk-retouch';
 import { EditorPage } from './editor';
 import { JobsPage } from './jobs';
 import { MatchingPage } from './matching';
@@ -13,6 +14,7 @@ export const routes: Routes = [
   { path: 'scans', component: ScanListPage },
   { path: 'scans/:id', component: EditorPage },
   { path: 'photos', component: PhotoListPage },
+  { path: 'retouch', component: BulkRetouchPage },
   { path: 'matching', component: MatchingPage },
   { path: 'photos/:id', component: EditorPage, data: { photo: true } },
   { path: 'uploaded', pathMatch: 'full', redirectTo: '/scans?status=uploaded' },

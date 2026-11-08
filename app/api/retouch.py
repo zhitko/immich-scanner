@@ -1,15 +1,82 @@
 from pathlib import Path
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
-from app.api.deps import get_services
-from app.retouch.catalog import CATALOG, ModelSpec
+from app.api.deps import get_services, get_session
+from app.clock import utcnow
+from app.jobs.queue import enqueue_job
+from app.retouch.batch import bulk_candidates
+from app.retouch.catalog import CATALOG, ModelSpec, specs_for
 from app.retouch.fetch import FetchError, download, inspect_file, model_actions, progress_for
 from app.runtime import Services
-from app.schemas import ModelFetch, ModelProgress, RetouchModelOut
+from app.schemas import (
+    BulkRetouchRequest,
+    BulkRetouchSummary,
+    ModelFetch,
+    ModelProgress,
+    RetouchModelOut,
+)
 
 router = APIRouter(prefix="/retouch", tags=["retouch"])
+
+
+@router.get("/bulk", response_model=BulkRetouchSummary)
+def preview_bulk_retouch(
+    state: Literal["open", "uploaded", "all"] = "all",
+    include_retouched: bool = False,
+    session: Session = Depends(get_session),
+) -> BulkRetouchSummary:
+    summary = BulkRetouchSummary()
+    for _region in bulk_candidates(session, state, include_retouched, summary):
+        pass
+    return summary
+
+
+@router.post("/bulk", response_model=BulkRetouchSummary, status_code=202)
+def run_bulk_retouch(
+    body: BulkRetouchRequest,
+    session: Session = Depends(get_session),
+    services: Services = Depends(get_services),
+) -> BulkRetouchSummary:
+    choice = body.choice
+    directory = services.settings.resolved_models_dir()
+    missing = [
+        filename
+        for spec in specs_for(
+            upscale=choice.upscale,
+            denoise=choice.denoise,
+            faces=choice.faces,
+            colorize=choice.colorize,
+            scratches=choice.scratches,
+        )
+        for filename in spec.filenames()
+        if not (directory / filename).is_file()
+    ]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing weights: {', '.join(missing)}. Download them under Settings first.",
+        )
+    summary = BulkRetouchSummary()
+    for region in bulk_candidates(session, body.state, body.include_retouched, summary):
+        for name, value in choice.model_dump().items():
+            setattr(region, f"retouch_{name}", value)
+        enqueue_job(
+            session,
+            job_type="retouch",
+            scan_id=region.scan_id,
+            region_id=region.id,
+            payload={"scan_id": region.scan_id, "region_id": region.id},
+        )
+        region.retouch_status = "queued"
+        region.retouch_error = None
+        region.updated_at = utcnow()
+        summary.queued += 1
+    session.flush()
+    return summary
 
 
 @router.get("/models", response_model=list[RetouchModelOut])

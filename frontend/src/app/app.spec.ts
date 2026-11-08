@@ -18,6 +18,14 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('h1')?.textContent).toContain('Scanner desk');
     const labels = [...compiled.querySelectorAll('nav a')].map((link) => link.textContent?.trim());
-    expect(labels).toEqual(['Scans', 'Photos', 'Matching', 'Jobs', 'Statistics', 'Settings']);
+    expect(labels).toEqual([
+      'Scans',
+      'Photos',
+      'Retouch',
+      'Matching',
+      'Jobs',
+      'Statistics',
+      'Settings',
+    ]);
   });
 });

@@ -4,6 +4,7 @@ import { Observable, map } from 'rxjs';
 
 import {
   Album,
+  BulkRetouchSummary,
   ConnectionTest,
   Job,
   MatchField,
@@ -126,6 +127,27 @@ export class ArchiveApi {
       `/api/scans/${scanId}/regions/${regionId}/retouch`,
       choice,
     );
+  }
+
+  bulkRetouchSummary(
+    state: 'open' | 'uploaded' | 'all',
+    includeRetouched: boolean,
+  ): Observable<BulkRetouchSummary> {
+    return this.http.get<BulkRetouchSummary>('/api/retouch/bulk', {
+      params: { state, include_retouched: includeRetouched },
+    });
+  }
+
+  bulkRetouch(
+    choice: RetouchChoice,
+    state: 'open' | 'uploaded' | 'all',
+    includeRetouched: boolean,
+  ): Observable<BulkRetouchSummary> {
+    return this.http.post<BulkRetouchSummary>('/api/retouch/bulk', {
+      choice,
+      state,
+      include_retouched: includeRetouched,
+    });
   }
 
   retouchModels(): Observable<RetouchModel[]> {
