@@ -17,7 +17,8 @@ def build_exif(
     exif: dict[int, object] = {}
     gps: dict[int, object] = {}
     if description:
-        zeroth[piexif.ImageIFD.ImageDescription] = description[:5000]
+        # Explicit bytes bypass piexif's Latin-1 encoding of string values.
+        zeroth[piexif.ImageIFD.ImageDescription] = description[:5000].encode("utf-8")
     if taken_at is not None:
         wall = taken_at.strftime("%Y:%m:%d %H:%M:%S")
         zeroth[piexif.ImageIFD.DateTime] = wall

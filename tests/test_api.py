@@ -71,7 +71,7 @@ def test_pipeline_detects_reviews_and_uploads(client, app_bundle) -> None:
         f"/api/scans/{scan_id}/regions/{region_id}",
         json={
             "taken_at": "1999-01-02T03:04:05+00:00",
-            "description": "Aunt Mae",
+            "description": "Teta Máňa 📷",
             "album_id": FAMILY_ALBUM,
             "latitude": 41.0,
             "longitude": -73.5,
@@ -110,8 +110,9 @@ def test_pipeline_detects_reviews_and_uploads(client, app_bundle) -> None:
     assert len(gateway.uploads) == 3
     exif = piexif.load(gateway.uploads[0].content)
     assert exif["Exif"][piexif.ExifIFD.DateTimeOriginal] == b"1999:01:02 03:04:05"
+    assert exif["0th"][piexif.ImageIFD.ImageDescription].decode("utf-8") == "Teta Máňa 📷"
     assert gateway.album_adds[0][0] == FAMILY_ALBUM
-    assert gateway.updates[0][1].description == "Aunt Mae"
+    assert gateway.updates[0][1].description == "Teta Máňa 📷"
     assert gateway.updates[0][1].is_favorite is True
     assert gateway.updates[0][1].latitude == 41.0
 

@@ -3,6 +3,7 @@ from io import BytesIO
 
 import numpy as np
 import piexif
+import pytest
 from PIL import Image
 
 from app.imaging.exif_data import build_exif, format_immich_datetime
@@ -28,3 +29,18 @@ def test_exif_records_wall_time_offset_and_gps(tmp_path) -> None:
     with Image.open(BytesIO(path.read_bytes())) as picture:
         assert int(round(picture.info["dpi"][0])) == 300
     assert format_immich_datetime(taken) == "1998-06-02T15:04:05.000Z"
+
+
+@pytest.mark.parametrize("output_format", ["jpeg", "png"])
+@pytest.mark.parametrize(
+    "description",
+    ["Beach", "Café", "Příliš žluťoučký kůň", "家族写真 📷", "📷" * 5001],
+    ids=["ascii", "latin1", "czech", "cjk-emoji", "truncated-emoji"],
+)
+def test_exif_description_round_trips_unicode(tmp_path, output_format, description) -> None:
+    payload = build_exif(taken_at=None, latitude=None, longitude=None, description=description)
+    path = tmp_path / f"photo.{output_format}"
+    save_rgb(np.zeros((8, 8, 3), np.uint8), path, output_format, exif=payload, dpi=300)
+    with Image.open(path) as picture:
+        loaded = piexif.load(picture.info["exif"])
+    assert loaded["0th"][piexif.ImageIFD.ImageDescription].decode("utf-8") == description[:5000]
