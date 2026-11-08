@@ -92,6 +92,13 @@ class RegionOut(BaseModel):
     updated_at: datetime
 
 
+class PhotoOut(RegionOut):
+    scan_id: str
+    created_at: datetime
+    files_deleted: bool
+    dpi: int | None
+
+
 class ScanSummary(BaseModel):
     id: str
     created_at: datetime

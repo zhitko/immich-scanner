@@ -83,6 +83,15 @@ export interface Region {
   updated_at: string;
 }
 
+export type PhotoFilter = 'original' | 'retouched' | 'has-date';
+
+export interface Photo extends Region {
+  scan_id: string;
+  created_at: string;
+  files_deleted: boolean;
+  dpi: number | null;
+}
+
 export interface ScanSummary {
   id: string;
   created_at: string;

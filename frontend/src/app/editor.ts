@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Observable, finalize, forkJoin, map, of, switchMap, tap } from 'rxjs';
 
 import { ArchiveApi, httpError } from './api';
@@ -33,7 +34,7 @@ import {
   snapAngle,
   TOUCH_TOLERANCE_PX,
 } from './geometry';
-import { Album, Region, RegionMetadata, RetouchModel, ScanDetail } from './models';
+import { Album, PhotoFilter, Region, RegionMetadata, RetouchModel, ScanDetail } from './models';
 import {
   chosenVersion,
   displayedAspect,
@@ -100,6 +101,9 @@ export class EditorPage {
   private readonly api = inject(ArchiveApi);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  readonly photoMode = this.route.snapshot.data['photo'] === true;
+  readonly listPath = this.photoMode ? '/photos' : '/scans';
+  readonly listQuery = this.photoMode ? this.route.snapshot.queryParams : {};
 
   readonly scan = signal<ScanDetail | null>(null);
   private readonly scanIds = signal<string[]>([]);
@@ -121,7 +125,7 @@ export class EditorPage {
   readonly cursor = signal('crosshair');
   readonly activeJob = signal<ActiveJob | null>(null);
   readonly ratings = [1, 2, 3, 4, 5];
-  readonly openSection = signal<Section | null>(storedSection());
+  readonly openSection = signal<Section | null>(this.photoMode ? 'retouch' : storedSection());
   readonly previewOpen = signal(false);
   /** The enlarged view follows the Retouched section only when opened from there. */
   readonly lightboxVersion = signal(false);
@@ -173,20 +177,25 @@ export class EditorPage {
       window.clearInterval(timer);
       window.clearTimeout(this.noticeTimer);
     });
-    this.route.paramMap.pipe(map((params) => params.get('id'))).subscribe((id) => {
-      if (id) {
-        this.scanId.set(id);
-        this.scan.set(null);
-        this.selectedId.set(null);
-        this.draft.set(null);
-        this.dirty.set(false);
-        this.drag.set(null);
-        this.activeJob.set(null);
-        this.notice.set('');
-        this.closePreview();
-        this.load(id);
-      }
-    });
+    this.route.paramMap
+      .pipe(
+        takeUntilDestroyed(),
+        map((params) => params.get('id')),
+      )
+      .subscribe((id) => {
+        if (id) {
+          this.scanId.set(id);
+          this.scan.set(null);
+          this.selectedId.set(null);
+          this.draft.set(null);
+          this.dirty.set(false);
+          this.drag.set(null);
+          this.activeJob.set(null);
+          this.notice.set('');
+          this.closePreview();
+          this.load(id);
+        }
+      });
     effect((onCleanup) => {
       const frame = this.frame()?.nativeElement;
       if (!frame) {
@@ -415,8 +424,7 @@ export class EditorPage {
     if (region.retouch_progress === null) {
       return compact ? 'Retouching…' : 'Retouching this photo…';
     }
-    const name =
-      region.retouch_stage ?? (compact ? 'Retouching' : 'Retouching this photo');
+    const name = region.retouch_stage ?? (compact ? 'Retouching' : 'Retouching this photo');
     return `${name}… ${region.retouch_progress}%`;
   }
 
@@ -508,19 +516,20 @@ export class EditorPage {
     if (!scan || !region) return;
     const scale = Number(value);
     if (scale !== 1 && scale !== 2 && scale !== 4) return;
-    this.run(this.api.patchRegion(scan.id, region.id, {
-      retouch_upscale: scale !== 1,
-      retouch_output_scale: scale === 2 ? 2 : 4,
-    }), (updated) => this.replaceRegion(updated, true));
+    this.run(
+      this.api.patchRegion(scan.id, region.id, {
+        retouch_upscale: scale !== 1,
+        retouch_output_scale: scale === 2 ? 2 : 4,
+      }),
+      (updated) => this.replaceRegion(updated, true),
+    );
   }
 
   runRetouch(): void {
     const scan = this.scan();
     const region = this.selected();
     if (!scan || !region || !this.retouchChosen(region)) {
-      this.error.set(
-        'Choose at least one retouch stage for this photo.',
-      );
+      this.error.set('Choose at least one retouch stage for this photo.');
       return;
     }
     if (this.dirty()) {
@@ -578,6 +587,10 @@ export class EditorPage {
   }
 
   step(offset: number): void {
+    if (this.photoMode) {
+      this.navigateScan(offset < 0 ? this.previousScanId() : this.nextScanId());
+      return;
+    }
     const scan = this.scan();
     if (!scan?.regions.length) {
       return;
@@ -593,7 +606,7 @@ export class EditorPage {
     }
     this.run(this.flushDraft(), (ok) => {
       if (ok) {
-        void this.router.navigate(['/scans', id]);
+        void this.router.navigate([this.listPath, id], { queryParams: this.listQuery });
       }
     });
   }
@@ -869,6 +882,10 @@ export class EditorPage {
     }
     const index = this.selectedIndex();
     this.run(this.api.deleteRegion(scan.id, region.id), () => {
+      if (this.photoMode) {
+        void this.router.navigate(['/photos'], { queryParams: this.listQuery });
+        return;
+      }
       this.noteEdit();
       this.scan.update((current) =>
         current
@@ -948,7 +965,14 @@ export class EditorPage {
       return;
     }
     const work = this.flushDraft().pipe(
-      switchMap((ok) => (ok ? this.api.upload(scan.id, regionId ? [regionId] : undefined) : EMPTY)),
+      switchMap((ok) =>
+        ok
+          ? this.api.upload(
+              scan.id,
+              regionId ? [regionId] : this.photoMode ? [this.selectedId()!] : undefined,
+            )
+          : EMPTY,
+      ),
     );
     this.run(work, (job) => {
       this.error.set('');
@@ -1035,7 +1059,7 @@ export class EditorPage {
   private load(id: string): void {
     this.error.set('');
     const revision = this.scanRevision;
-    this.api.getScan(id).subscribe({
+    (this.photoMode ? this.api.getPhoto(id) : this.api.getScan(id)).subscribe({
       next: (scan) => {
         if (revision !== this.scanRevision || this.scanId() !== id) {
           return;
@@ -1043,7 +1067,17 @@ export class EditorPage {
         this.applyScan(scan);
         // Keep the review/history order stable while working through this list.
         if (!this.scanIds().includes(id)) {
-          this.api.listScans(scan.upload_state === 'complete' ? 'uploaded' : 'open').subscribe({
+          const status = this.route.snapshot.queryParamMap.get('status');
+          const photoState = status === 'uploaded' || status === 'all' ? status : 'open';
+          const filters = this.route.snapshot.queryParamMap
+            .getAll('filter')
+            .filter((value): value is PhotoFilter =>
+              ['original', 'retouched', 'has-date'].includes(value),
+            );
+          const items: Observable<{ id: string }[]> = this.photoMode
+            ? this.api.listPhotos(photoState, filters)
+            : this.api.listScans(scan.upload_state === 'complete' ? 'uploaded' : 'open');
+          items.subscribe({
             next: (scans) => {
               if (this.scanId() === id) {
                 this.scanIds.set(scans.map((item) => item.id));
@@ -1071,7 +1105,7 @@ export class EditorPage {
       return;
     }
     const revision = this.scanRevision;
-    this.api.getScan(id).subscribe({
+    (this.photoMode ? this.api.getPhoto(id) : this.api.getScan(id)).subscribe({
       next: (scan) => {
         if (revision !== this.scanRevision || this.scanId() !== id) {
           return;

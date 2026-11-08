@@ -1033,6 +1033,43 @@ button.star.on {
 
 /* Editor */
 
+.photo-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-bottom: 12px;
+}
+.photo-thumb .crop-ratio {
+  width: min(100%, calc(200px * var(--aspect)));
+}
+.photo-thumb img.crop {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 100cqi;
+  height: 100cqb;
+  max-height: none;
+}
+.card:hover .photo-thumb img.crop {
+  transform: translate(-50%, -50%) rotate(calc(var(--turns) * 90deg));
+}
+.photo-thumb .crop-ratio.odd .crop {
+  width: 100cqb;
+  height: 100cqi;
+}
+.photo-page .photo-stage-frame {
+  width: min(100%, calc(65dvh * var(--aspect)));
+  flex: none;
+}
+.photo-page .stage {
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: center;
+}
+.crop-ratio .crop.sideways {
+  width: 100cqb;
+  height: 100cqi;
+}
+
 .editor {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);

@@ -1,0 +1,114 @@
+<section class="panel">
+  <div class="section-head">
+    <div>
+      <h2>Photos</h2>
+      <p class="lede">Individual photos from your scans, ready to retouch and describe.</p>
+    </div>
+    <div class="filters" role="group" aria-label="Photo status">
+      @for (item of statuses; track item.value) {
+        <button
+          type="button"
+          [class.active]="mode() === item.value"
+          [attr.aria-pressed]="mode() === item.value"
+          (click)="choose(item.value)"
+        >
+          {{ item.label }}
+        </button>
+      }
+    </div>
+  </div>
+  <div class="photo-filters" role="group" aria-label="Photo filters">
+    @for (item of filters; track item.value) {
+      <label class="check">
+        <input
+          type="checkbox"
+          [checked]="selectedFilters().includes(item.value)"
+          (change)="toggleFilter(item.value)"
+        />
+        {{ item.label }}
+      </label>
+    }
+  </div>
+  <p class="muted small">
+    Original: no current retouch. Retouched: a current retouch is available. Select both to include
+    either; Has date narrows the results.
+  </p>
+  @if (error()) {
+    <p class="banner warn" role="alert">{{ error() }}</p>
+  }
+  @if (photos() === null) {
+    <p class="muted">Loading photos…</p>
+  } @else if (!photos()!.length) {
+    <p class="empty">No photos match these filters.</p>
+  } @else {
+    <ul class="cards">
+      @for (photo of photos()!; track photo.id) {
+        <li class="card">
+          <a
+            class="thumb photo-thumb"
+            [routerLink]="['/photos', photo.id]"
+            [queryParams]="{ status: mode() === 'open' ? null : mode(), filter: selectedFilters() }"
+            [attr.aria-label]="'Open photo ' + photo.position"
+          >
+            @if (!photo.files_deleted) {
+              <div
+                class="crop-ratio"
+                [class.odd]="previewTurns(photo) % 2 === 1"
+                [style.--aspect]="aspect(photo)"
+                [style.--turns]="previewTurns(photo)"
+              >
+                <img class="crop" [src]="previewUrl(photo)" alt="" loading="lazy" />
+              </div>
+            } @else {
+              <span>File removed</span>
+            }
+          </a>
+          <div class="card-body">
+            <a
+              class="card-title"
+              [routerLink]="['/photos', photo.id]"
+              [queryParams]="{
+                status: mode() === 'open' ? null : mode(),
+                filter: selectedFilters(),
+              }"
+            >
+              Photo {{ photo.position }} · {{ formatStamp(photo.created_at) }}
+            </a>
+            <p class="card-meta">
+              <span
+                class="chip"
+                [attr.data-tone]="
+                  photo.upload_status === 'uploaded'
+                    ? 'ok'
+                    : photo.upload_status === 'failed'
+                      ? 'bad'
+                      : ''
+                "
+              >
+                {{
+                  photo.upload_status === 'uploaded'
+                    ? 'Uploaded'
+                    : photo.upload_status === 'uploading'
+                      ? 'Uploading…'
+                      : photo.upload_status === 'failed'
+                        ? 'Failed'
+                        : 'Waiting'
+                }}
+              </span>
+              <span class="chip">{{ photo.retouch_ready ? 'Retouched' : 'Original' }}</span>
+              @if (photo.taken_at) {
+                <span class="muted small">{{ formatStamp(photo.taken_at) }}</span>
+              }
+            </p>
+            @if (photo.description) {
+              <p>{{ photo.description }}</p>
+            }
+            @if (photo.upload_error) {
+              <p class="banner warn small">{{ photo.upload_error }}</p>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</section>

@@ -1,6 +1,8 @@
-<section class="panel wide editor-page">
+<section class="panel wide editor-page" [class.photo-page]="photoMode">
   @if (!scan()) {
-    <a class="back back-solo" routerLink="/scans">← Scans</a>
+    <a class="back back-solo" [routerLink]="listPath" [queryParams]="listQuery"
+      >← {{ photoMode ? 'Photos' : 'Scans' }}</a
+    >
   }
 
   @if (error()) {
@@ -16,18 +18,27 @@
   @if (scan(); as scan) {
     <div class="section-head">
       <div class="section-copy">
-        <a class="back" routerLink="/scans">← Scans</a>
-        <h2>Scan from {{ formatStamp(scan.created_at) }}</h2>
-        <p class="lede">
-          {{ scan.regions.length }} {{ scan.regions.length === 1 ? 'photo' : 'photos' }} ·
-          {{ scan.uploaded_count }} uploaded
-          <span class="muted small">
-            · {{ scan.width }}×{{ scan.height }} px
-            @if (scan.dpi) {
-              · {{ scan.dpi }} dpi
-            }
-          </span>
-        </p>
+        <a class="back" [routerLink]="listPath" [queryParams]="listQuery"
+          >← {{ photoMode ? 'Photos' : 'Scans' }}</a
+        >
+        <h2>
+          {{ photoMode ? 'Photo ' + selected()?.position + ' from' : 'Scan from' }}
+          {{ formatStamp(scan.created_at) }}
+        </h2>
+        @if (photoMode) {
+          <a class="small" [routerLink]="['/scans', scan.id]">Open source scan →</a>
+        } @else {
+          <p class="lede">
+            {{ scan.regions.length }} {{ scan.regions.length === 1 ? 'photo' : 'photos' }} ·
+            {{ scan.uploaded_count }} uploaded
+            <span class="muted small">
+              · {{ scan.width }}×{{ scan.height }} px
+              @if (scan.dpi) {
+                · {{ scan.dpi }} dpi
+              }
+            </span>
+          </p>
+        }
       </div>
       <div class="toolbar">
         <button
@@ -35,33 +46,39 @@
           (click)="navigateScan(previousScanId())"
           [disabled]="busy() || !!drag() || !previousScanId()"
         >
-          ← Previous scan
+          ← Previous {{ photoMode ? 'photo' : 'scan' }}
         </button>
         <button
           type="button"
           (click)="navigateScan(nextScanId())"
           [disabled]="busy() || !!drag() || !nextScanId()"
         >
-          Next scan →
+          Next {{ photoMode ? 'photo' : 'scan' }} →
         </button>
-        <button type="button" (click)="addRegion()" [disabled]="busy() || scan.files_deleted">
-          Add photo
-        </button>
-        <button
-          type="button"
-          (click)="redetect()"
-          [disabled]="busy() || scan.files_deleted || detecting()"
-        >
-          Detect again
-        </button>
-        <button type="button" class="danger" (click)="deleteScan()" [disabled]="busy()">
-          Delete scan
-        </button>
+        @if (!photoMode) {
+          <button type="button" (click)="addRegion()" [disabled]="busy() || scan.files_deleted">
+            Add photo
+          </button>
+          <button
+            type="button"
+            (click)="redetect()"
+            [disabled]="busy() || scan.files_deleted || detecting()"
+          >
+            Detect again
+          </button>
+          <button type="button" class="danger" (click)="deleteScan()" [disabled]="busy()">
+            Delete scan
+          </button>
+        }
         <button
           type="button"
           class="primary"
-          (click)="upload()"
-          [disabled]="busy() || scan.files_deleted || pendingCount() === 0 || uploading()"
+          (click)="upload(photoMode ? (selectedId() ?? undefined) : undefined)"
+          [disabled]="
+            photoMode
+              ? !selected() || !canUpload(selected()!)
+              : busy() || scan.files_deleted || pendingCount() === 0 || uploading()
+          "
         >
           @if (uploading()) {
             <span class="spinner" aria-hidden="true"></span> Uploading…
@@ -92,7 +109,60 @@
 
     <div class="editor">
       <div class="stage">
-        @if (!scan.files_deleted) {
+        @if (photoMode && selected(); as photo) {
+          @if (!scan.files_deleted) {
+            <div
+              class="photo-stage-frame crop-ratio comparable"
+              [class.can-compare]="photo.retouch_ready"
+              [style.--aspect]="frameAspect(photo)"
+              (pointerdown)="hold('retouch', $event)"
+              (pointerleave)="release()"
+              (contextmenu)="photo.retouch_ready && $event.preventDefault()"
+            >
+              @for (version of frameVersions(photo); track version) {
+                <img
+                  class="crop"
+                  draggable="false"
+                  [class.sideways]="versionTurns(photo, version) % 2 === 1"
+                  [class.hidden]="retouchShown(photo) !== version"
+                  [style.--turns]="versionTurns(photo, version)"
+                  [src]="versionUrl(photo, version)"
+                  [alt]="versionAlt(photo, version)"
+                />
+              }
+              <span class="version-tag">{{ versionName(retouchShown(photo)) }}</span>
+              @if (retouchShown(photo) === 'retouch' && photo.retouch_reconstructs_faces) {
+                <span class="reconstruction">Reconstruction</span>
+              }
+              <div class="crop-tools start">
+                <button type="button" (click)="openPreview(true)">View larger</button>
+              </div>
+              <div class="crop-tools">
+                <button
+                  type="button"
+                  aria-label="Rotate left"
+                  (click)="rotate(false)"
+                  [disabled]="busy()"
+                >
+                  ↶
+                </button>
+                <button
+                  type="button"
+                  aria-label="Rotate right"
+                  (click)="rotate(true)"
+                  [disabled]="busy()"
+                >
+                  ↷
+                </button>
+              </div>
+            </div>
+            @if (photo.retouch_ready) {
+              <p class="hints small">Press and hold the image to see the other version.</p>
+            }
+          } @else {
+            <p class="empty">File removed</p>
+          }
+        } @else if (!scan.files_deleted) {
           <div class="bed">
             <div class="frame" #frame>
               <img [src]="bedUrl()" alt="Full scanner bed" (load)="redraw()" />
@@ -136,7 +206,9 @@
         @if (selected(); as region) {
           <div class="inspector-head">
             <h3>Photo {{ region.position }}</h3>
-            <span class="muted small">of {{ scan.regions.length }}</span>
+            @if (!photoMode) {
+              <span class="muted small">of {{ scan.regions.length }}</span>
+            }
             <span class="chip" [attr.data-tone]="statusTone(region)">{{
               statusLabel(region)
             }}</span>
@@ -183,70 +255,72 @@
           }
 
           @if (!scan.files_deleted) {
-            <details
-              class="section"
-              name="inspector-section"
-              [open]="openSection() === 'preview'"
-              (toggle)="setSectionOpen('preview', $any($event.target).open)"
-            >
-              <summary>Preview</summary>
-              <div class="section-body">
-                <div class="crop-box">
-                  <div
-                    class="crop-ratio"
-                    [class.odd]="region.quarter_turns % 2 === 1"
-                    [style.--aspect]="frameAspect(region)"
-                    [style.--turns]="region.quarter_turns % 4"
-                  >
-                    <img class="crop" [src]="originalUrl(region)" alt="Straightened crop" />
-                    <div class="crop-tools start">
-                      <button
-                        type="button"
-                        class="icon"
-                        title="View larger"
-                        aria-label="View larger"
-                        (click)="openPreview()"
-                      >
-                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M15 3h6v6" />
-                          <path d="M9 21H3v-6" />
-                          <path d="M21 3 14 10" />
-                          <path d="m3 21 7-7" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div class="crop-tools">
-                      <button
-                        type="button"
-                        class="icon"
-                        title="Rotate left (Shift+R)"
-                        aria-label="Rotate left"
-                        (click)="rotate(false)"
-                        [disabled]="busy()"
-                      >
-                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                          <path d="M3 3v5h5" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        class="icon"
-                        title="Rotate right (R)"
-                        aria-label="Rotate right"
-                        (click)="rotate(true)"
-                        [disabled]="busy()"
-                      >
-                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
-                          <path d="M21 3v5h-5" />
-                        </svg>
-                      </button>
+            @if (!photoMode) {
+              <details
+                class="section"
+                name="inspector-section"
+                [open]="openSection() === 'preview'"
+                (toggle)="setSectionOpen('preview', $any($event.target).open)"
+              >
+                <summary>Preview</summary>
+                <div class="section-body">
+                  <div class="crop-box">
+                    <div
+                      class="crop-ratio"
+                      [class.odd]="region.quarter_turns % 2 === 1"
+                      [style.--aspect]="frameAspect(region)"
+                      [style.--turns]="region.quarter_turns % 4"
+                    >
+                      <img class="crop" [src]="originalUrl(region)" alt="Straightened crop" />
+                      <div class="crop-tools start">
+                        <button
+                          type="button"
+                          class="icon"
+                          title="View larger"
+                          aria-label="View larger"
+                          (click)="openPreview()"
+                        >
+                          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M15 3h6v6" />
+                            <path d="M9 21H3v-6" />
+                            <path d="M21 3 14 10" />
+                            <path d="m3 21 7-7" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div class="crop-tools">
+                        <button
+                          type="button"
+                          class="icon"
+                          title="Rotate left (Shift+R)"
+                          aria-label="Rotate left"
+                          (click)="rotate(false)"
+                          [disabled]="busy()"
+                        >
+                          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                            <path d="M3 3v5h5" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          class="icon"
+                          title="Rotate right (R)"
+                          aria-label="Rotate right"
+                          (click)="rotate(true)"
+                          [disabled]="busy()"
+                        >
+                          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                            <path d="M21 3v5h-5" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </details>
+              </details>
+            }
 
             <details
               class="section"
@@ -254,52 +328,56 @@
               [open]="openSection() === 'retouch'"
               (toggle)="setSectionOpen('retouch', $any($event.target).open)"
             >
-              <summary>Retouched</summary>
+              <summary>{{ photoMode ? 'Retouch' : 'Retouched' }}</summary>
               <div class="section-body">
-                <div class="crop-box">
-                  <div
-                    class="crop-ratio comparable"
-                    [class.can-compare]="region.retouch_ready"
-                    [style.--aspect]="frameAspect(region)"
-                    (pointerdown)="hold('retouch', $event)"
-                    (pointerleave)="release()"
-                    (contextmenu)="region.retouch_ready && $event.preventDefault()"
-                  >
-                    @for (version of frameVersions(region); track version) {
-                      <img
-                        class="crop"
-                        draggable="false"
-                        [class.sideways]="versionTurns(region, version) % 2 === 1"
-                        [class.hidden]="retouchShown(region) !== version"
-                        [style.--turns]="versionTurns(region, version)"
-                        [src]="versionUrl(region, version)"
-                        [alt]="versionAlt(region, version)"
-                      />
-                    }
-                    @if (retouchShown(region) === 'retouch' && region.retouch_reconstructs_faces) {
-                      <span class="reconstruction">Reconstruction</span>
-                    }
-                    @if (region.retouch_ready) {
-                      <span class="version-tag">{{ versionName(retouchShown(region)) }}</span>
-                    }
-                    <div class="crop-tools start">
-                      <button
-                        type="button"
-                        class="icon"
-                        title="View larger"
-                        aria-label="View larger"
-                        (click)="openPreview(true)"
-                      >
-                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M15 3h6v6" />
-                          <path d="M9 21H3v-6" />
-                          <path d="M21 3 14 10" />
-                          <path d="m3 21 7-7" />
-                        </svg>
-                      </button>
+                @if (!photoMode) {
+                  <div class="crop-box">
+                    <div
+                      class="crop-ratio comparable"
+                      [class.can-compare]="region.retouch_ready"
+                      [style.--aspect]="frameAspect(region)"
+                      (pointerdown)="hold('retouch', $event)"
+                      (pointerleave)="release()"
+                      (contextmenu)="region.retouch_ready && $event.preventDefault()"
+                    >
+                      @for (version of frameVersions(region); track version) {
+                        <img
+                          class="crop"
+                          draggable="false"
+                          [class.sideways]="versionTurns(region, version) % 2 === 1"
+                          [class.hidden]="retouchShown(region) !== version"
+                          [style.--turns]="versionTurns(region, version)"
+                          [src]="versionUrl(region, version)"
+                          [alt]="versionAlt(region, version)"
+                        />
+                      }
+                      @if (
+                        retouchShown(region) === 'retouch' && region.retouch_reconstructs_faces
+                      ) {
+                        <span class="reconstruction">Reconstruction</span>
+                      }
+                      @if (region.retouch_ready) {
+                        <span class="version-tag">{{ versionName(retouchShown(region)) }}</span>
+                      }
+                      <div class="crop-tools start">
+                        <button
+                          type="button"
+                          class="icon"
+                          title="View larger"
+                          aria-label="View larger"
+                          (click)="openPreview(true)"
+                        >
+                          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M15 3h6v6" />
+                            <path d="M9 21H3v-6" />
+                            <path d="M21 3 14 10" />
+                            <path d="m3 21 7-7" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
+                }
                 <div class="version-choice" role="group" aria-label="Which version to upload">
                   <button
                     type="button"
@@ -363,27 +441,36 @@
                 }
                 @if (region.retouch_status === 'stale') {
                   <p class="banner small">
-                    The crop or the retouch stages changed. Run retouch again before uploading
-                    that version.
+                    The crop or the retouch stages changed. Run retouch again before uploading that
+                    version.
                   </p>
                 }
                 <div class="retouch-options">
                   <label class="check">
-                    <input type="checkbox" [checked]="region.retouch_dust"
+                    <input
+                      type="checkbox"
+                      [checked]="region.retouch_dust"
                       (change)="setRetouch('retouch_dust', $any($event.target).checked)"
-                      [disabled]="busy() || retouchingRegion(region)" />
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
                     Remove dust and small spots
                   </label>
                   <label class="check">
-                    <input type="checkbox" [checked]="region.retouch_gentle_denoise"
+                    <input
+                      type="checkbox"
+                      [checked]="region.retouch_gentle_denoise"
                       (change)="setRetouch('retouch_gentle_denoise', $any($event.target).checked)"
-                      [disabled]="busy() || retouchingRegion(region)" />
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
                     Gentle denoise (native resolution)
                   </label>
                   <label class="check">
-                    <input type="checkbox" [checked]="region.retouch_deblur"
+                    <input
+                      type="checkbox"
+                      [checked]="region.retouch_deblur"
                       (change)="setRetouch('retouch_deblur', $any($event.target).checked)"
-                      [disabled]="busy() || retouchingRegion(region)" />
+                      [disabled]="busy() || retouchingRegion(region)"
+                    />
                     Deblur mild softness
                   </label>
                   <label class="check">
@@ -424,9 +511,11 @@
                   </label>
                   <label>
                     Output size
-                    <select [value]="region.retouch_upscale ? region.retouch_output_scale : 1"
+                    <select
+                      [value]="region.retouch_upscale ? region.retouch_output_scale : 1"
                       (change)="setOutputScale($any($event.target).value)"
-                      [disabled]="busy() || retouchingRegion(region)">
+                      [disabled]="busy() || retouchingRegion(region)"
+                    >
                       <option value="1">1× — original size</option>
                       <option value="2">2× — AI upscale</option>
                       <option value="4">4× — AI upscale</option>
@@ -714,6 +803,6 @@
       </div>
     }
   } @else if (!error()) {
-    <p class="muted">Loading scan…</p>
+    <p class="muted">Loading {{ photoMode ? 'photo' : 'scan' }}…</p>
   }
 </section>

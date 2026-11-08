@@ -6,6 +6,8 @@ import {
   Album,
   ConnectionTest,
   Job,
+  Photo,
+  PhotoFilter,
   Region,
   RegionGeometry,
   RegionMetadata,
@@ -33,6 +35,14 @@ export class ArchiveApi {
 
   getScan(id: string): Observable<ScanDetail> {
     return this.http.get<ScanDetail>(`/api/scans/${id}`);
+  }
+
+  listPhotos(state: 'open' | 'uploaded' | 'all', filters: PhotoFilter[] = []): Observable<Photo[]> {
+    return this.http.get<Photo[]>('/api/photos', { params: { state, filters } });
+  }
+
+  getPhoto(id: string): Observable<ScanDetail> {
+    return this.http.get<ScanDetail>(`/api/photos/${id}`);
   }
 
   deleteScan(id: string): Observable<void> {
