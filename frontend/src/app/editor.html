@@ -1,6 +1,6 @@
 <section class="panel wide editor-page">
   @if (!scan()) {
-    <a class="back back-solo" routerLink="/scans">← Waiting for review</a>
+    <a class="back back-solo" routerLink="/scans">← Scans</a>
   }
 
   @if (error()) {
@@ -16,7 +16,7 @@
   @if (scan(); as scan) {
     <div class="section-head">
       <div class="section-copy">
-        <a class="back" routerLink="/scans">← Waiting for review</a>
+        <a class="back" routerLink="/scans">← Scans</a>
         <h2>Scan from {{ formatStamp(scan.created_at) }}</h2>
         <p class="lede">
           {{ scan.regions.length }} {{ scan.regions.length === 1 ? 'photo' : 'photos' }} ·

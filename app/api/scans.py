@@ -69,8 +69,8 @@ def list_scans(
         query = query.where(Scan.upload_state == "complete")
     elif state == "open":
         query = query.where(Scan.upload_state != "complete")
-    else:
-        raise HTTPException(status_code=422, detail="state must be open or uploaded")
+    elif state != "all":
+        raise HTTPException(status_code=422, detail="state must be open, uploaded, or all")
     return [scan_summary(session, scan) for scan in session.scalars(query)]
 
 

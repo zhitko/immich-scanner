@@ -4,6 +4,7 @@ import piexif
 
 from app.immich.gateway import Album, AssetMetadata, AssetUploadResult, ImmichError, PhotoUpload
 from app.intake import register_scan
+from app.models import Scan
 from app.scanner.base import ScannerError
 from app.scanner.fake import FakeScanner
 from mock_immich.app import FAMILY_ALBUM
@@ -124,6 +125,23 @@ def test_pipeline_detects_reviews_and_uploads(client, app_bundle) -> None:
     assert client.get(f"/api/scans/{scan_id}/original").status_code == 404
     jobs = client.get("/api/jobs").json()
     assert {job["status"] for job in jobs} == {"finished"}
+
+
+def test_scan_status_filters_include_all_states(client, app_bundle) -> None:
+    _app, services = app_bundle
+    waiting_id = _import_bed(services, encode_png(make_bed()), filename="waiting.png")
+    uploaded_id = _import_bed(services, encode_png(make_bed()), filename="uploaded.png")
+    with services.session_factory() as session:
+        session.get(Scan, uploaded_id).upload_state = "complete"
+        session.commit()
+
+    assert [scan["id"] for scan in client.get("/api/scans").json()] == [waiting_id]
+    assert [scan["id"] for scan in client.get("/api/scans?state=uploaded").json()] == [uploaded_id]
+    assert [scan["id"] for scan in client.get("/api/scans?state=all").json()] == [
+        uploaded_id,
+        waiting_id,
+    ]
+    assert client.get("/api/scans?state=invalid").status_code == 422
 
 
 def test_manual_region_rotate_and_retry(client, app_bundle) -> None:

@@ -27,7 +27,7 @@ export class ArchiveApi {
     return this.http.get<Statistics>('/api/statistics');
   }
 
-  listScans(state: 'open' | 'uploaded'): Observable<ScanSummary[]> {
+  listScans(state: 'open' | 'uploaded' | 'all'): Observable<ScanSummary[]> {
     return this.http.get<ScanSummary[]>('/api/scans', { params: { state } });
   }
 

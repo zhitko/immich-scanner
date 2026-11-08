@@ -97,7 +97,7 @@ cleanup switches and preserves the previous 4× enlargement default.
 
 The desk is one Angular app:
 
-- **Waiting** shows whether the scanner is reachable and scans the bed, with the elapsed time while it runs. "Open for review when done" jumps straight to the new scan. The list holds scans that are not fully uploaded and shows which ones are still being detected.
+- **Scans** shows whether the scanner is reachable and scans the bed, with the elapsed time while it runs. "Open for review when done" jumps straight to the new scan. Filter the list by **Waiting** (the default, for scans that are not fully uploaded), **Uploaded**, or **All**. The list also shows which scans are still being detected.
 - Open a scan to see the bed with the detected regions drawn on top. Drag a region to move it, drag an edge to change its width or height, drag a corner to resize it, and drag the round handle to rotate it (Shift snaps to 15°). Drag on an empty part of the bed to outline a photo the detector missed. Detection again replaces only regions that have not been uploaded, and skips photos that are already uploaded.
 - Each photo has a date taken, description, album, location, favorite flag, rating, and visibility. "Save locally" writes those details on this computer only. "Copy to all photos" copies the date, album, and location to the rest of the scan. Pasting `lat, lon` into the latitude field fills both. Unsaved details are saved locally before switching photos or uploading. Rotate by 90° either way when a print is sideways. The crop preview is the straightened photo.
 - Keyboard: <kbd>←</kbd>/<kbd>→</kbd> switch photos, <kbd>R</kbd>/<kbd>Shift</kbd>+<kbd>R</kbd> rotate, <kbd>Delete</kbd> removes, <kbd>Ctrl</kbd>+<kbd>S</kbd> saves locally.

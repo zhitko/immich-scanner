@@ -1,60 +1,72 @@
 <section class="panel">
-  @if (mode() === 'open') {
-    <div class="scan-bar" [attr.data-state]="lampState()">
-      <div class="scan-status">
-        <p class="lamp" [attr.data-state]="lampState()">
-          <span class="lamp-dot" aria-hidden="true"></span>
-          {{ scanner()?.scanner_message || 'Checking the scanner…' }}
-        </p>
-        @if (scanning()) {
-          <p class="phase">
-            <span class="spinner" aria-hidden="true"></span>
-            {{ scanner()?.phase === 'idle' ? 'Starting…' : scanner()?.phase_message }}
-            @if (elapsed()) {
-              <span class="muted">{{ elapsed() }}</span>
-            }
-          </p>
-        } @else if (scanner()?.last_scan_message) {
-          <p class="phase" [attr.data-tone]="scanner()?.last_scan_ok ? 'ok' : 'bad'" role="status">
-            {{ scanner()!.last_scan_message }}
-            @if (scanner()?.last_scan_ok && scanner()?.last_scan_id) {
-              <a [routerLink]="['/scans', scanner()!.last_scan_id]">Review now →</a>
-            }
-          </p>
-        } @else {
-          <p class="phase muted">Put the photos face down on the glass, a few millimetres apart.</p>
-        }
-      </div>
-      <div class="scan-actions">
-        <button type="button" class="primary big" [disabled]="scanning()" (click)="scan()">
-          @if (scanning()) {
-            <span class="spinner" aria-hidden="true"></span> Scanning…
-          } @else {
-            Scan bed
+  <div class="scan-bar" [attr.data-state]="lampState()">
+    <div class="scan-status">
+      <p class="lamp" [attr.data-state]="lampState()">
+        <span class="lamp-dot" aria-hidden="true"></span>
+        {{ scanner()?.scanner_message || 'Checking the scanner…' }}
+      </p>
+      @if (scanning()) {
+        <p class="phase">
+          <span class="spinner" aria-hidden="true"></span>
+          {{ scanner()?.phase === 'idle' ? 'Starting…' : scanner()?.phase_message }}
+          @if (elapsed()) {
+            <span class="muted">{{ elapsed() }}</span>
           }
-        </button>
-        <label class="check small">
-          <input
-            type="checkbox"
-            [checked]="autoOpen()"
-            (change)="toggleAutoOpen($any($event.target).checked)"
-          />
-          Open for review when done
-        </label>
-      </div>
+        </p>
+      } @else if (scanner()?.last_scan_message) {
+        <p class="phase" [attr.data-tone]="scanner()?.last_scan_ok ? 'ok' : 'bad'" role="status">
+          {{ scanner()!.last_scan_message }}
+          @if (scanner()?.last_scan_ok && scanner()?.last_scan_id) {
+            <a [routerLink]="['/scans', scanner()!.last_scan_id]">Review now →</a>
+          }
+        </p>
+      } @else {
+        <p class="phase muted">Put the photos face down on the glass, a few millimetres apart.</p>
+      }
     </div>
-  }
+    <div class="scan-actions">
+      <button type="button" class="primary big" [disabled]="scanning()" (click)="scan()">
+        @if (scanning()) {
+          <span class="spinner" aria-hidden="true"></span> Scanning…
+        } @else {
+          Scan bed
+        }
+      </button>
+      <label class="check small">
+        <input
+          type="checkbox"
+          [checked]="autoOpen()"
+          (change)="toggleAutoOpen($any($event.target).checked)"
+        />
+        Open for review when done
+      </label>
+    </div>
+  </div>
 
   <div class="section-head">
     <div>
-      <h2>{{ mode() === 'open' ? 'Waiting for review' : 'Uploaded' }}</h2>
+      <h2>Scans</h2>
       <p class="lede">
         @if (mode() === 'open') {
           Scans that still have photos to check or send.
-        } @else {
+        } @else if (mode() === 'uploaded') {
           Finished scans. The history stays after the original file is removed.
+        } @else {
+          All scans, including those waiting for review and already uploaded.
         }
       </p>
+    </div>
+    <div class="filters" role="group" aria-label="Scan status">
+      @for (item of statuses; track item.value) {
+        <button
+          type="button"
+          [class.active]="mode() === item.value"
+          [attr.aria-pressed]="mode() === item.value"
+          (click)="choose(item.value)"
+        >
+          {{ item.label }}
+        </button>
+      }
     </div>
   </div>
 
@@ -68,8 +80,10 @@
     <p class="empty">
       @if (mode() === 'open') {
         Nothing waiting. Put the photos on the glass and press “Scan bed”.
-      } @else {
+      } @else if (mode() === 'uploaded') {
         No finished scans yet.
+      } @else {
+        No scans yet. Put the photos on the glass and press “Scan bed”.
       }
     </p>
   } @else {
@@ -114,9 +128,9 @@
             }
             <div class="actions">
               <a class="button primary" [routerLink]="['/scans', scan.id]">
-                {{ mode() === 'open' ? 'Review' : 'Open' }}
+                {{ scan.upload_state === 'complete' ? 'Open' : 'Review' }}
               </a>
-              @if (mode() === 'uploaded' && !scan.files_deleted) {
+              @if (scan.upload_state === 'complete' && !scan.files_deleted) {
                 <button type="button" [disabled]="busyId() === scan.id" (click)="deleteFiles(scan)">
                   Free disk space
                 </button>

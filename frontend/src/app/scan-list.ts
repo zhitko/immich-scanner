@@ -1,4 +1,5 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { ArchiveApi, httpError } from './api';
@@ -18,8 +19,14 @@ export class ScanListPage {
   private readonly router = inject(Router);
   private previousPhase = 'idle';
   private ticks = 0;
+  private loadId = 0;
 
-  readonly mode = signal<'open' | 'uploaded'>('open');
+  readonly statuses = [
+    { value: 'open', label: 'Waiting' },
+    { value: 'uploaded', label: 'Uploaded' },
+    { value: 'all', label: 'All' },
+  ] as const;
+  readonly mode = signal<'open' | 'uploaded' | 'all'>('open');
   readonly scans = signal<ScanSummary[] | null>(null);
   readonly scanner = signal<ScannerStatus | null>(null);
   readonly error = signal('');
@@ -53,13 +60,19 @@ export class ScanListPage {
     const destroyRef = inject(DestroyRef);
     const timer = window.setInterval(() => this.tick(), 1000);
     destroyRef.onDestroy(() => window.clearInterval(timer));
-    this.route.data.subscribe((data) => {
-      this.mode.set(data['mode'] === 'uploaded' ? 'uploaded' : 'open');
-      this.previousPhase = 'idle';
+    this.route.queryParamMap.pipe(takeUntilDestroyed(destroyRef)).subscribe((params) => {
+      const status = params.get('status');
+      this.mode.set(status === 'uploaded' || status === 'all' ? status : 'open');
       this.load();
-      if (this.mode() === 'open') {
-        this.loadScanner();
-      }
+    });
+    this.loadScanner();
+  }
+
+  choose(mode: 'open' | 'uploaded' | 'all'): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { status: mode === 'open' ? null : mode },
+      queryParamsHandling: 'merge',
     });
   }
 
@@ -145,7 +158,7 @@ export class ScanListPage {
   private tick(): void {
     this.now.set(Date.now());
     this.ticks += 1;
-    if (this.mode() === 'open' && (this.scanning() || this.ticks % 3 === 0)) {
+    if (this.scanning() || this.ticks % 3 === 0) {
       this.loadScanner();
     }
     if (this.ticks % 2 === 0 && this.scans()?.some((scan) => scan.detecting)) {
@@ -154,14 +167,19 @@ export class ScanListPage {
   }
 
   private load(quiet = false): void {
+    const loadId = ++this.loadId;
     if (!quiet) {
       this.error.set('');
       this.scans.set(null);
     }
     this.api.listScans(this.mode()).subscribe({
-      next: (scans) => this.scans.set(scans),
+      next: (scans) => {
+        if (loadId === this.loadId) {
+          this.scans.set(scans);
+        }
+      },
       error: (error: unknown) => {
-        if (!quiet) {
+        if (!quiet && loadId === this.loadId) {
           this.scans.set([]);
           this.error.set(httpError(error));
         }

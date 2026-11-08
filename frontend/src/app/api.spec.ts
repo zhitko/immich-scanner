@@ -51,6 +51,13 @@ describe('ArchiveApi', () => {
     request.flush([]);
   });
 
+  it('lists scans across all upload states', () => {
+    api.listScans('all').subscribe((scans) => expect(scans).toEqual([]));
+    const request = http.expectOne('/api/scans?state=all');
+    expect(request.request.method).toBe('GET');
+    request.flush([]);
+  });
+
   it('uploads one region and asks for detection', () => {
     api.upload('scan-1', ['region-1']).subscribe((body) => expect(body.job_id).toBe('job-1'));
     const upload = http.expectOne('/api/scans/scan-1/upload');
