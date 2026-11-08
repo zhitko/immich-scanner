@@ -110,6 +110,7 @@ def handle_retouch(session: Session, job: Job, services: Services) -> None:
             current.retouch_status = "queued"
         elif expected_retouch_signature(current) == produced:
             current.retouch_status = "ready"
+            current.upload_source = "retouch"
         else:
             current.retouch_status = "stale"
             if current.upload_source == "retouch":

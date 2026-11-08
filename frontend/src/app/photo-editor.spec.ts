@@ -123,7 +123,8 @@ describe('Photo editor', () => {
     expect(TestBed.inject(Router).url).toBe('/photos?status=all&filter=original');
   });
 
-  it('runs retouch on the open photo and shows its chosen version in the main image', async () => {
+  it('automatically selects and shows the retouched photo when the job finishes', async () => {
+    const timer = vi.spyOn(window, 'setInterval').mockReturnValue(0);
     const harness = await open();
     const editor = harness.routeDebugElement!.componentInstance as EditorPage;
     editor.setRetouch('retouch_contrast', true);
@@ -138,21 +139,32 @@ describe('Photo editor', () => {
       region: {
         ...photo,
         retouch_contrast: true,
-        retouch_ready: true,
-        retouch_status: 'ready',
-        retouch_version: 'v1',
+        retouch_status: 'queued',
       },
     });
-    editor.chooseVersion('retouch');
-    const choice = http.expectOne('/api/scans/scan-1/regions/photo-2');
-    expect(choice.request.body).toEqual({ upload_source: 'retouch' });
-    choice.flush({
-      ...photo,
-      upload_source: 'retouch',
-      retouch_ready: true,
-      retouch_version: 'v1',
+    expect(editor.selected()?.upload_source).toBe('crop');
+    const poll = timer.mock.calls.find(([, delay]) => delay === 1500)![0] as () => void;
+    poll();
+    http.expectOne('/api/jobs/retouch-1').flush({ status: 'finished', error: null });
+    http.expectOne('/api/photos/photo-2').flush({
+      ...detail,
+      regions: [
+        {
+          ...photo,
+          retouch_contrast: true,
+          upload_source: 'retouch',
+          retouch_ready: true,
+          retouch_status: 'ready',
+          retouch_version: 'v1',
+        },
+      ],
     });
     harness.detectChanges();
+    expect(editor.selected()?.upload_source).toBe('retouch');
+    expect(
+      harness.routeNativeElement!.querySelector('.version-choice button[aria-pressed="true"]')
+        ?.textContent,
+    ).toContain('Retouched');
     const images = harness.routeNativeElement!.querySelectorAll(
       '.photo-stage-frame img:not(.hidden)',
     );

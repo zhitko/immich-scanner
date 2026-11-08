@@ -1103,7 +1103,7 @@ def test_levels_only_retouch_and_option_changes_invalidate_result(client, app_bu
     assert restored.json()["retouch_ready"] is True
 
 
-def test_retouch_keeps_the_crop_and_upload_uses_it_only_when_chosen(client, app_bundle) -> None:
+def test_retouch_selects_the_result_and_keeps_the_crop_available(client, app_bundle) -> None:
     app, services = app_bundle
     services.retoucher = MarkRetoucher()
     scan_id = _import_bed(services, encode_png(make_bed()))
@@ -1145,6 +1145,7 @@ def test_retouch_keeps_the_crop_and_upload_uses_it_only_when_chosen(client, app_
     assert started.status_code == 202
     assert started.json()["region"]["retouch_upscale"] is True
     assert started.json()["region"]["retouch_denoise"] is True
+    assert started.json()["region"]["upload_source"] == "crop"
     again = client.post(
         f"/api/scans/{scan_id}/regions/{first['id']}/retouch",
         json={"upscale": True, "faces": False, "colorize": False, "scratches": False},
@@ -1164,6 +1165,8 @@ def test_retouch_keeps_the_crop_and_upload_uses_it_only_when_chosen(client, app_
     upscaled = next(region for region in done["regions"] if region["id"] == first["id"])
     restored = next(region for region in done["regions"] if region["id"] == second["id"])
     assert upscaled["retouch_ready"] is True
+    assert upscaled["upload_source"] == "retouch"
+    assert restored["upload_source"] == "retouch"
     assert upscaled["retouch_version"]
     assert first["retouch_version"] is None
     assert upscaled["retouch_reconstructs_faces"] is False
@@ -1193,6 +1196,12 @@ def test_retouch_keeps_the_crop_and_upload_uses_it_only_when_chosen(client, app_
             "default_album_id": "",
         },
     )
+    chosen_crop = client.patch(
+        f"/api/scans/{scan_id}/regions/{first['id']}",
+        json={"upload_source": "crop"},
+    )
+    assert chosen_crop.status_code == 200
+    assert chosen_crop.json()["upload_source"] == "crop"
     client.post(f"/api/scans/{scan_id}/upload", json={"region_ids": [first["id"]]})
     app.state.worker.process_available()
     original = _png(gateway.uploads[0].content)
