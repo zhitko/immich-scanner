@@ -1,3 +1,36 @@
+export interface Statistics {
+  scans: number;
+  scans_uploaded: number;
+  scans_cleaned_up: number;
+  detection_errors: number;
+  photos: number;
+  uploaded: number;
+  pending: number;
+  uploading: number;
+  failed: number;
+  with_date: number;
+  with_description: number;
+  with_album: number;
+  with_location: number;
+  favorites: number;
+  with_rating: number;
+  metadata_synced: number;
+  albums: number;
+  retouched: number;
+  retouched_upscale: number;
+  retouched_denoise: number;
+  retouched_faces: number;
+  retouched_colorize: number;
+  retouched_scratches: number;
+  retouched_color_balance: number;
+  retouched_contrast: number;
+  first_scan_at: string | null;
+  latest_scan_at: string | null;
+  earliest_photo_at: string | null;
+  latest_photo_at: string | null;
+  latest_upload_at: string | null;
+}
+
 export interface Region {
   id: string;
   position: number;

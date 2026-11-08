@@ -16,11 +16,16 @@ import {
   ScanSummary,
   ScannerStatus,
   Settings,
+  Statistics,
 } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ArchiveApi {
   private readonly http = inject(HttpClient);
+
+  getStatistics(): Observable<Statistics> {
+    return this.http.get<Statistics>('/api/statistics');
+  }
 
   listScans(state: 'open' | 'uploaded'): Observable<ScanSummary[]> {
     return this.http.get<ScanSummary[]>('/api/scans', { params: { state } });

@@ -7,6 +7,39 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 Visibility = Literal["timeline", "archive", "hidden"]
 
 
+class StatisticsOut(BaseModel):
+    scans: int
+    scans_uploaded: int
+    scans_cleaned_up: int
+    detection_errors: int
+    photos: int
+    uploaded: int
+    pending: int
+    uploading: int
+    failed: int
+    with_date: int
+    with_description: int
+    with_album: int
+    with_location: int
+    favorites: int
+    with_rating: int
+    metadata_synced: int
+    albums: int
+    retouched: int
+    retouched_upscale: int
+    retouched_denoise: int
+    retouched_faces: int
+    retouched_colorize: int
+    retouched_scratches: int
+    retouched_color_balance: int
+    retouched_contrast: int
+    first_scan_at: datetime | None
+    latest_scan_at: datetime | None
+    earliest_photo_at: datetime | None
+    latest_photo_at: datetime | None
+    latest_upload_at: datetime | None
+
+
 class RegionOut(BaseModel):
     id: str
     position: int

@@ -1,0 +1,145 @@
+<section class="panel" [attr.aria-busy]="loading()">
+  <div class="section-head">
+    <div>
+      <h2>Statistics</h2>
+      <p class="lede">Your scanning collection, uploads, and photo details at a glance.</p>
+    </div>
+    <button type="button" (click)="load()" [disabled]="loading()">
+      {{ loading() ? 'Refreshing…' : 'Refresh' }}
+    </button>
+  </div>
+
+  @if (error()) {
+    <p class="banner warn" role="alert">{{ error() }}</p>
+  }
+  @if (statistics(); as stats) {
+    @if (stats.scans === 0) {
+      <p class="empty">No scans yet. Scan your first bed from Waiting to start your collection.</p>
+    }
+    <div class="stat-totals">
+      <article class="stat-card">
+        <h3>Scans</h3>
+        <strong class="stat-number">{{ stats.scans | number }}</strong>
+        <p class="muted">{{ stats.scans_uploaded | number }} fully uploaded</p>
+      </article>
+      <article class="stat-card">
+        <h3>Photos</h3>
+        <strong class="stat-number">{{ stats.photos | number }}</strong>
+        <p class="muted">
+          {{ (stats.scans ? stats.photos / stats.scans : 0) | number: '1.0-1' }} per scan
+        </p>
+      </article>
+      <article class="stat-card">
+        <h3>Uploaded photos</h3>
+        <strong class="stat-number">{{ stats.uploaded | number }}</strong>
+        <p class="muted">{{ percentage(stats.uploaded, stats.photos) }}% of photos</p>
+      </article>
+      <article class="stat-card">
+        <h3>Albums assigned</h3>
+        <strong class="stat-number">{{ stats.albums | number }}</strong>
+        <p class="muted">Across {{ stats.with_album | number }} photos</p>
+      </article>
+    </div>
+
+    <div class="stat-sections">
+      <section class="stat-card" aria-labelledby="retouch-title">
+        <h3 id="retouch-title">Retouched photos</h3>
+        <strong class="stat-number">{{ stats.retouched | number }}</strong>
+        <p class="muted small">
+          {{ percentage(stats.retouched, stats.photos) }}% of photos have a completed retouch.
+          Includes older results and records whose local files were cleaned up.
+        </p>
+        <dl>
+          @for (item of retouchSteps; track item.key) {
+            <div class="stat-row">
+              <dt>{{ item.label }}</dt>
+              <dd class="num">{{ stats[item.key] | number }}</dd>
+            </div>
+          }
+        </dl>
+        <p class="muted small">
+          Steps used in each photo’s latest completed retouch. A photo can count toward several
+          steps. Selected options without a completed result are not counted.
+        </p>
+      </section>
+
+      <section class="stat-card" aria-labelledby="metadata-title">
+        <h3 id="metadata-title">Photo metadata</h3>
+        <p class="muted small">
+          Photos with saved details, out of {{ stats.photos | number }} photos.
+        </p>
+        @for (item of metadata; track item.key) {
+          <div class="coverage">
+            <div class="stat-row">
+              <span>{{ item.label }}</span>
+              <span class="num"
+                >{{ stats[item.key] | number }}
+                <span class="muted">· {{ percentage(stats[item.key], stats.photos) }}%</span></span
+              >
+            </div>
+            <progress
+              [value]="stats[item.key]"
+              [max]="stats.photos || 1"
+              [attr.aria-label]="item.label"
+            ></progress>
+          </div>
+        }
+      </section>
+
+      <section class="stat-card" aria-labelledby="uploads-title">
+        <h3 id="uploads-title">Upload status</h3>
+        <p class="muted small">Current status of each photo, not the number of upload attempts.</p>
+        <dl>
+          @for (item of uploads; track item.key) {
+            <div class="stat-row">
+              <dt>{{ item.label }}</dt>
+              <dd class="num">{{ stats[item.key] | number }}</dd>
+            </div>
+          }
+          <div class="stat-row">
+            <dt>Uploaded with metadata synced</dt>
+            <dd class="num">{{ stats.metadata_synced | number }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="stat-card" aria-labelledby="dates-title">
+        <h3 id="dates-title">Collection dates</h3>
+        <p class="muted small">Photo dates come from the date taken saved during review.</p>
+        <dl>
+          @for (item of dates; track item.key) {
+            <div class="stat-row">
+              <dt>{{ item.label }}</dt>
+              <dd>{{ formatStamp(stats[item.key]) || 'Not available' }}</dd>
+            </div>
+          }
+        </dl>
+      </section>
+
+      <section class="stat-card" aria-labelledby="records-title">
+        <h3 id="records-title">Scan records</h3>
+        <p class="muted small">Cleaning up local files keeps the scan and photo records.</p>
+        <dl>
+          <div class="stat-row">
+            <dt>Not fully uploaded</dt>
+            <dd class="num">{{ stats.scans - stats.scans_uploaded | number }}</dd>
+          </div>
+          <div class="stat-row">
+            <dt>Local files cleaned up</dt>
+            <dd class="num">{{ stats.scans_cleaned_up | number }}</dd>
+          </div>
+          <div class="stat-row">
+            <dt>Detection errors</dt>
+            <dd class="num">{{ stats.detection_errors | number }}</dd>
+          </div>
+        </dl>
+      </section>
+    </div>
+    <p class="muted small">
+      Totals include all saved scan and photo records, even after local file cleanup. Permanently
+      deleted records are not included. Refresh to see the latest changes.
+    </p>
+  } @else if (loading()) {
+    <p class="muted" role="status">Loading statistics…</p>
+  }
+</section>
