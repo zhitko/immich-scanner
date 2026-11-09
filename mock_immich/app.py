@@ -26,6 +26,15 @@ class BulkIds(BaseModel):
     ids: list[str]
 
 
+class AssetDelete(BulkIds):
+    force: bool = False
+
+
+class AssetCopy(BaseModel):
+    sourceId: str
+    targetId: str
+
+
 class AssetUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     dateTimeOriginal: str | None = None
@@ -125,6 +134,24 @@ def create_mock_app() -> FastAPI:
         }
         STORE.by_checksum[digest] = asset_id
         return JSONResponse({"id": asset_id, "status": "created"}, status_code=201)
+
+    @app.put("/api/assets/copy", status_code=204)
+    def copy_asset(body: AssetCopy, x_api_key: str | None = Header(default=None)) -> None:
+        _require_key(x_api_key)
+        if body.sourceId not in STORE.assets or body.targetId not in STORE.assets:
+            raise HTTPException(status_code=404, detail="asset not found")
+        for album in STORE.albums.values():
+            if body.sourceId in album["assetIds"]:
+                album["assetIds"].add(body.targetId)
+        STORE.assets[body.targetId]["isFavorite"] = STORE.assets[body.sourceId]["isFavorite"]
+
+    @app.delete("/api/assets", status_code=204)
+    def delete_assets(body: AssetDelete, x_api_key: str | None = Header(default=None)) -> None:
+        _require_key(x_api_key)
+        for asset_id in body.ids:
+            if asset_id not in STORE.assets:
+                raise HTTPException(status_code=404, detail="asset not found")
+            STORE.assets[asset_id]["isTrashed"] = True
 
     @app.get("/api/assets/{asset_id}")
     def get_asset(asset_id: str, x_api_key: str | None = Header(default=None)) -> dict[str, object]:

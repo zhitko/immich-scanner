@@ -77,15 +77,16 @@
           [disabled]="
             photoMode
               ? !selected() || !canUpload(selected()!)
-              : busy() || scan.files_deleted || pendingCount() === 0 || uploading()
+              : busy() || scan.files_deleted || scan.regions.length === 0 || uploading()
           "
         >
           @if (uploading()) {
             <span class="spinner" aria-hidden="true"></span> Uploading…
-          } @else if (pendingCount() > 0) {
-            Upload {{ pendingCount() }} {{ pendingCount() === 1 ? 'photo' : 'photos' }}
+          } @else if (photoMode && selected()) {
+            {{ uploadLabel(selected()!) }}
           } @else if (scan.regions.length) {
-            All uploaded
+            {{ scan.uploaded_count > 0 ? 'Reupload' : 'Upload' }}
+            {{ scan.regions.length }} {{ scan.regions.length === 1 ? 'photo' : 'photos' }}
           } @else {
             Upload
           }
@@ -249,7 +250,8 @@
           }
           @if (region.crop_changed) {
             <p class="banner small">
-              The crop changed after upload. Uploading again creates a new asset in Immich.
+              The crop changed after upload. Reuploading replaces the photo in Immich and moves the
+              previous version to trash.
             </p>
           }
 

@@ -1,9 +1,12 @@
 import hashlib
+from dataclasses import replace
 
+import httpx
+import pytest
 from starlette.testclient import TestClient
 
 from app.immich.client import ImmichClient
-from app.immich.gateway import AssetMetadata, PhotoUpload
+from app.immich.gateway import AssetMetadata, ImmichError, PhotoUpload
 from mock_immich.app import FAMILY_ALBUM, STORE, create_mock_app, reset_store
 
 
@@ -68,3 +71,71 @@ def test_mock_rejects_an_upload_missing_required_fields() -> None:
     assert response.status_code == 400
     missing = http.get("/albums")
     assert missing.status_code == 401
+
+
+def test_replacement_copies_albums_and_trashes_old_asset() -> None:
+    reset_store()
+    http = TestClient(create_mock_app(), base_url="http://immich/api")
+    client = ImmichClient("http://unused.example", "test-key", http=http)
+    photo = PhotoUpload(
+        filename="print.jpg", content=b"original", content_type="image/jpeg",
+        file_created_at="1999-01-02T03:04:05.000Z",
+        file_modified_at="1999-01-02T03:04:05.000Z",
+        sha1=hashlib.sha1(b"original").hexdigest(),
+    )
+    original = client.upload_asset(photo)
+    client.add_assets_to_album(FAMILY_ALBUM, [original.id])
+    identical = client.replace_asset(original.id, photo)
+    assert identical.id == original.id
+    assert not STORE.assets[original.id].get("isTrashed")
+
+    changed = replace(photo, content=b"replacement", sha1=hashlib.sha1(b"replacement").hexdigest())
+    replacement = client.replace_asset(original.id, changed)
+    assert replacement.id != original.id
+    assert STORE.assets[replacement.id]["bytes"] == b"replacement"
+    assert replacement.id in STORE.albums[FAMILY_ALBUM]["assetIds"]
+    assert STORE.assets[original.id]["isTrashed"] is True
+
+
+@pytest.mark.parametrize("failure", ["upload", "copy"])
+def test_failed_replacement_does_not_delete_old_asset(failure) -> None:
+    calls = []
+
+    def respond(request):
+        calls.append(request.method)
+        if request.method == "GET":
+            return httpx.Response(200, json={"id": "old"})
+        if request.method == "POST" and failure != "upload":
+            return httpx.Response(201, json={"id": "new", "status": "created"})
+        if request.method == "PUT":
+            return httpx.Response(400, json={"message": "Not found or no asset.copy access"})
+        return httpx.Response(500, text="failed")
+
+    http = httpx.Client(base_url="http://immich/api", transport=httpx.MockTransport(respond))
+    client = ImmichClient("http://unused.example", "test-key", http=http)
+    photo = PhotoUpload("a.jpg", b"a", "image/jpeg", "date", "date", "checksum")
+    with pytest.raises(ImmichError):
+        client.replace_asset("old", photo)
+    assert "DELETE" not in calls
+
+
+@pytest.mark.parametrize("status", [400, 404])
+def test_reupload_when_previous_asset_was_deleted(status) -> None:
+    calls = []
+
+    def respond(request):
+        calls.append((request.method, request.url.path))
+        if request.method == "POST":
+            return httpx.Response(201, json={"id": "new", "status": "created"})
+        if request.method == "GET":
+            return httpx.Response(status, json={"message": "Not found or no asset.read access"})
+        pytest.fail("A deleted asset must not be copied or deleted again")
+
+    with httpx.Client(
+        base_url="http://immich/api", transport=httpx.MockTransport(respond)
+    ) as http:
+        client = ImmichClient("http://unused.example", "test-key", http=http)
+        photo = PhotoUpload("a.jpg", b"a", "image/jpeg", "date", "date", "checksum")
+        result = client.replace_asset("deleted", photo)
+    assert result.id == "new"
+    assert calls == [("POST", "/api/assets"), ("GET", "/api/assets/deleted")]

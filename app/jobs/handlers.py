@@ -53,7 +53,7 @@ def handle_upload(session: Session, job, services: Services) -> None:
     if isinstance(requested, list) and requested:
         wanted = {str(item) for item in requested}
         regions = [region for region in regions if region.id in wanted]
-    else:
+    elif not payload.get("force_upload"):
         regions = [region for region in regions if needs_upload(region)]
     if not regions:
         refresh_upload_state(session, scan)
@@ -68,7 +68,10 @@ def handle_upload(session: Session, job, services: Services) -> None:
         for region in regions:
             region_id = region.id
             try:
-                _upload_region(session, services, gateway, scan, region, image, stored)
+                _upload_region(
+                    session, services, gateway, scan, region, image, stored,
+                    force_upload=bool(payload.get("force_upload")) or bool(requested),
+                )
                 session.commit()
             except Exception as exc:
                 session.rollback()
@@ -168,14 +171,16 @@ def _replace_open_regions(session: Session, scan: Scan, detected) -> None:
         )
 
 
-def _upload_region(session, services, gateway, scan, region, image, stored) -> None:
+def _upload_region(
+    session, services, gateway, scan, region, image, stored, *, force_upload: bool = False
+) -> None:
     region.upload_status = "uploading"
     region.upload_error = None
     region.updated_at = utcnow()
     session.commit()
     signature = content_signature(region)
     content_changed = region.immich_asset_id is None or region.uploaded_crop_signature != signature
-    if content_changed:
+    if content_changed or force_upload:
         cropped, output_dpi = _pixels_for_upload(services, scan, region, image)
         taken = region.taken_at if isinstance(region.taken_at, datetime) else None
         exif = build_exif(
@@ -198,16 +203,18 @@ def _upload_region(session, services, gateway, scan, region, image, stored) -> N
         )
         content = target.read_bytes()
         stamp = format_immich_datetime(taken or datetime.now(UTC))
-        result = gateway.upload_asset(
-            PhotoUpload(
-                filename=f"scan-{scan.id[:8]}-{region.position:02d}.{extension}",
-                content=content,
-                content_type=content_type,
-                file_created_at=stamp,
-                file_modified_at=stamp,
-                sha1=hashlib.sha1(content).hexdigest(),
-            )
+        photo = PhotoUpload(
+            filename=f"scan-{scan.id[:8]}-{region.position:02d}.{extension}",
+            content=content,
+            content_type=content_type,
+            file_created_at=stamp,
+            file_modified_at=stamp,
+            sha1=hashlib.sha1(content).hexdigest(),
         )
+        if region.immich_asset_id:
+            result = gateway.replace_asset(region.immich_asset_id, photo)
+        else:
+            result = gateway.upload_asset(photo)
         region.immich_asset_id = result.id
         region.immich_status = result.status
         region.uploaded_crop_signature = signature

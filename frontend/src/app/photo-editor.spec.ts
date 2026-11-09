@@ -61,9 +61,9 @@ describe('Photo editor', () => {
     vi.restoreAllMocks();
   });
 
-  async function open() {
+  async function open(scanDetail = detail) {
     const harness = await RouterTestingHarness.create('/photos/photo-2?status=all&filter=original');
-    http.expectOne('/api/photos/photo-2?apply_defaults=true').flush(detail);
+    http.expectOne('/api/photos/photo-2?apply_defaults=true').flush(scanDetail);
     http
       .expectOne('/api/photos?state=all&filters=original')
       .flush([{ id: 'photo-1' }, { id: 'photo-2' }, { id: 'photo-3' }]);
@@ -91,6 +91,21 @@ describe('Photo editor', () => {
     const upload = http.expectOne('/api/scans/scan-1/upload');
     expect(upload.request.body).toEqual({ region_ids: ['photo-2'] });
     upload.flush({ job_id: 'upload-1' });
+  });
+
+  it('enables reupload for an already uploaded photo without local changes', async () => {
+    const harness = await open({
+      ...detail,
+      uploaded_count: 1,
+      regions: [{ ...photo, upload_status: 'uploaded', needs_upload: false, immich_asset_id: 'asset-2' }],
+    });
+    const button = harness.routeNativeElement!.querySelector('.toolbar .primary') as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    expect(button.textContent).toContain('Reupload to Immich');
+    button.click();
+    const upload = http.expectOne('/api/scans/scan-1/upload');
+    expect(upload.request.body).toEqual({ region_ids: ['photo-2'] });
+    upload.flush({ job_id: 'reupload-1' });
   });
 
   it('saves metadata for the selected photo before navigating with the same filters', async () => {

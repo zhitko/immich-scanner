@@ -56,6 +56,9 @@ class ImmichGateway(Protocol):
     def upload_asset(self, photo: PhotoUpload) -> AssetUploadResult:
         """Upload one file. A duplicate checksum still returns the existing id."""
 
+    def replace_asset(self, asset_id: str, photo: PhotoUpload) -> AssetUploadResult:
+        """Upload a replacement, copy associations, and trash the previous asset."""
+
     def add_assets_to_album(self, album_id: str, asset_ids: list[str]) -> None:
         """Add assets to one album."""
 

@@ -23,6 +23,7 @@ class RecordingImmich:
         self.uploads: list[PhotoUpload] = []
         self.album_adds: list[tuple[str, list[str]]] = []
         self.updates: list[tuple[str, AssetMetadata]] = []
+        self.replacements: list[tuple[str, PhotoUpload]] = []
         self.fail = False
 
     def server_version(self) -> str:
@@ -40,6 +41,11 @@ class RecordingImmich:
 
     def add_assets_to_album(self, album_id: str, asset_ids: list[str]) -> None:
         self.album_adds.append((album_id, asset_ids))
+
+    def replace_asset(self, asset_id: str, photo: PhotoUpload) -> AssetUploadResult:
+        result = self.upload_asset(photo)
+        self.replacements.append((asset_id, photo))
+        return result
 
     def update_asset(self, asset_id: str, metadata: AssetMetadata) -> None:
         self.updates.append((asset_id, metadata))
@@ -177,6 +183,36 @@ def test_pipeline_detects_reviews_and_uploads(client, app_bundle) -> None:
     assert client.get(f"/api/scans/{scan_id}/original").status_code == 404
     jobs = client.get("/api/jobs").json()
     assert {job["status"] for job in jobs} == {"finished"}
+
+
+def test_explicit_upload_replaces_already_uploaded_photos(client, app_bundle) -> None:
+    app, services = app_bundle
+    scan_id = _import_bed(services, encode_png(make_bed()))
+    app.state.worker.process_available()
+    gateway = RecordingImmich()
+    services.build_gateway = lambda _url, _key: gateway
+    client.put("/api/settings", json={
+        "immich_base_url": "http://immich.local:2283", "immich_api_key": "secret-key",
+    })
+    client.post(f"/api/scans/{scan_id}/upload")
+    app.state.worker.process_available()
+    original = client.get(f"/api/scans/{scan_id}").json()["regions"]
+    assert len(gateway.uploads) == len(original)
+
+    # A user-requested upload must not skip an unchanged, already uploaded photo.
+    client.post(f"/api/scans/{scan_id}/upload", json={"region_ids": [original[0]["id"]]})
+    app.state.worker.process_available()
+    assert len(gateway.replacements) == 1
+    assert gateway.replacements[0][0] == original[0]["immich_asset_id"]
+    current = client.get(f"/api/scans/{scan_id}").json()["regions"]
+    assert current[0]["immich_asset_id"] != original[0]["immich_asset_id"]
+    assert current[0]["upload_status"] == "uploaded"
+    assert current[1]["immich_asset_id"] == original[1]["immich_asset_id"]
+
+    # The scan-wide button also includes photos that were already uploaded.
+    client.post(f"/api/scans/{scan_id}/upload")
+    app.state.worker.process_available()
+    assert len(gateway.replacements) == 1 + len(original)
 
 
 def test_scan_status_filters_include_all_states(client, app_bundle) -> None:

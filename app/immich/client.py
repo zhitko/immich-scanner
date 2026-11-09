@@ -1,3 +1,5 @@
+from contextlib import suppress
+
 import httpx
 
 from app.immich.gateway import (
@@ -97,6 +99,30 @@ class ImmichClient:
         if failed:
             reason = failed[0].get("error") or failed[0].get("errorMessage") or "unknown"
             raise ImmichError(f"could not add the asset to the album ({reason})")
+
+    def replace_asset(self, asset_id: str, photo: PhotoUpload) -> AssetUploadResult:
+        result = self.upload_asset(photo)
+        if result.id != asset_id:
+            previous = self._request("GET", f"/assets/{asset_id}")
+            # Immich uses 400 for missing assets as well as 404. Do not treat
+            # unrelated validation or server errors as a deleted source asset.
+            missing = previous.status_code == 404
+            if previous.status_code == 400:
+                with suppress(ValueError, AttributeError):
+                    missing = previous.json().get("message") == "Not found or no asset.read access"
+            if missing:
+                return result
+            if previous.status_code >= 400:
+                raise ImmichError(
+                    f"GET /assets/{asset_id} failed: "
+                    f"{previous.status_code} {previous.text[:300]}"
+                )
+            self._json(
+                "PUT", "/assets/copy", json={"sourceId": asset_id, "targetId": result.id}
+            )
+            # Only trash the old version after the upload and association copy succeed.
+            self._json("DELETE", "/assets", json={"ids": [asset_id], "force": False})
+        return result
 
     def update_asset(self, asset_id: str, metadata: AssetMetadata) -> None:
         payload: dict[str, object] = {

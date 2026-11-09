@@ -366,7 +366,7 @@ export class EditorPage {
     if (region.upload_source === 'retouch' && !region.retouch_ready) {
       return false;
     }
-    return this.dirty() || region.needs_upload;
+    return true;
   }
 
   uploadLabel(region: Region): string {
@@ -376,8 +376,8 @@ export class EditorPage {
     if (region.upload_status === 'failed') {
       return 'Retry upload';
     }
-    if (region.upload_status === 'uploaded' && !region.needs_upload && !this.dirty()) {
-      return 'Uploaded';
+    if (region.immich_asset_id || region.upload_status === 'uploaded') {
+      return 'Reupload to Immich';
     }
     return 'Upload to Immich';
   }

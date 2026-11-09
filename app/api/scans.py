@@ -135,7 +135,7 @@ def upload_scan(
 ) -> dict[str, str]:
     scan = _scan(session, scan_id)
     _require_files(scan)
-    payload: dict[str, object] = {"scan_id": scan.id}
+    payload: dict[str, object] = {"scan_id": scan.id, "force_upload": True}
     if body and body.region_ids:
         payload["region_ids"] = body.region_ids
     job = enqueue_job(session, job_type="upload", scan_id=scan.id, payload=payload)
