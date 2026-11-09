@@ -163,7 +163,9 @@ contrast restoration, colorization, upscale/denoise, then face restoration.
 **Correct color cast** balances the RGB black and white levels of faded color prints,
 such as photos that have turned red or yellow. **Restore contrast** expands washed-out
 black and white levels and gently balances broad brightness gradients by lifting shaded
-areas and holding back bright ones, including in black-and-white photos. Both are optional, need no
+areas and holding back bright ones, including in black-and-white photos. It also reduces
+broad haze by gently lowering raised local black levels where nearby detail supports it.
+Fully washed-out detail cannot be recovered. Both are optional, need no
 model download, and can be selected per photo or as defaults under Settings → Processing.
 For a red print, start with color-cast correction; for a pale black-and-white print,
 start with contrast restoration. Enable both when needed and compare the Retouched preview.

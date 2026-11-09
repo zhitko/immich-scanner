@@ -69,3 +69,20 @@ def test_levels_run_without_weights_and_report_progress(tmp_path) -> None:
     assert options_from_token(option_token(options)) == options
     assert options_from_token("u0d0f0c0s0") == RetouchOptions()
     assert options_from_token("u1f0c0s0") == RetouchOptions(upscale=True, denoise=True)
+
+
+def test_contrast_reduces_local_veil_and_recovers_detail() -> None:
+    # Identical dark/light texture, with an additive veil in the upper left.
+    y, x = np.mgrid[:256, :384]
+    clean = np.where((y // 4) % 2, 160.0, 24.0)
+    veil = 80 * np.exp(-((x / 150) ** 2 + (y / 130) ** 2))
+    gray = np.rint(clean * (1 - veil / 255) + veil).astype(np.uint8)
+    image = np.repeat(gray[:, :, None], 3, axis=2)
+    result = restore_contrast(image)[:, :, 0]
+    patch = np.s_[16:80, 16:80]
+    dark = clean[patch] == 24
+    before, after = gray[patch], result[patch]
+    assert after[dark].mean() < before[dark].mean() - 10
+    assert after[~dark].mean() - after[dark].mean() > (
+        before[~dark].mean() - before[dark].mean()
+    ) * 1.1

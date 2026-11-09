@@ -115,6 +115,8 @@ def geometry_signature(region: Region) -> str:
 
 def expected_retouch_signature(region: Region) -> str:
     revision = "|scratch-v4" if region.retouch_scratches else ""
+    if region.retouch_contrast:
+        revision += "|contrast-v2"
     return f"{geometry_signature(region)}{revision}|{option_token(options_from_region(region))}"
 
 
@@ -168,7 +170,7 @@ def retouch_matches(region: Region) -> bool:
         return True
     # Earlier masks either erased fabric or left crease edges unfilled. They
     # need regeneration even when the selected switches still match.
-    if region.retouch_scratches:
+    if region.retouch_scratches or region.retouch_contrast:
         return False
     # A derivative from before denoise was its own bit stays current when the
     # saved upscale bit still means both steps and the crop is unchanged.
