@@ -1,0 +1,11 @@
+# docker compose -f docker-compose.yml -f docker-compose.intel-gpu.yml up --build -d
+services:
+  scanner:
+    build:
+      context: .
+      target: intel-gpu
+    environment:
+      RETOUCH_EXECUTION: openvino
+      RETOUCH_OPENVINO_DEVICE: GPU
+    devices:
+      - "/dev/dri:/dev/dri"

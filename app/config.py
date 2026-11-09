@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     scanner_backend: Literal["sane", "fake"] = "sane"
     models_dir: Path | None = None
     retouch_execution: Literal["cpu", "openvino"] = "cpu"
-    retouch_openvino_device: str = "CPU_FP32"
+    retouch_openvino_device: str = "CPU"
     resolution_dpi: int = Field(default=300, ge=50, le=4800)
     scan_format: Literal["tiff", "png"] = "tiff"
 

@@ -62,7 +62,7 @@ class OnnxRetoucher:
         self,
         models_dir: Path,
         execution: str = "cpu",
-        openvino_device: str = "CPU_FP32",
+        openvino_device: str = "CPU",
     ) -> None:
         self.models_dir = models_dir
         self.execution = execution
@@ -216,7 +216,11 @@ class OnnxRetoucher:
         cached = self._sessions.get(spec.id)
         if cached is not None and cached[0] == stamp:
             return cached[1]
-        opened = open_session(path, self.execution, self.openvino_device)
+        # GPU acceleration is supported for the two Real-ESRGAN exports. LaMa's
+        # dynamic shapes cannot compile on the Intel GPU; other restoration
+        # networks retain their established CPU execution path as well.
+        execution = self.execution if spec.id in {"upscale", "scale"} else "cpu"
+        opened = open_session(path, execution, self.openvino_device)
         self._sessions[spec.id] = (stamp, opened)
         return opened
 

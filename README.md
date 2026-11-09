@@ -198,7 +198,48 @@ in the portrait used for the scratch regression. Mask coverage measures how much
 is selected, not detection accuracy; inspect both intact texture and actual damage.
 Existing results made with the old scratch detector are stale and need a new retouch.
 
-`RETOUCH_EXECUTION=openvino` selects the OpenVINO provider when that build of ONNX Runtime includes it. The device is `RETOUCH_OPENVINO_DEVICE` (default `CPU_FP32`), so the integrated GPU is not used unless you set it. Measure both on the laptop before deciding which is faster.
+### Intel Iris Xe GPU (including Raptor Lake-P)
+
+Real-ESRGAN powers **Strong AI denoise** and the **2× / 4× AI upscale** output sizes.
+Enable either or both in a photo's Retouch controls or on the bulk Retouch page.
+At original size, Strong AI denoise restores with Real-ESRGAN and resizes back to 1×.
+Install the corresponding Real-ESRGAN models in Settings first.
+
+To run neural retouch stages on the Intel integrated GPU with OpenVINO:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.intel-gpu.yml up --build -d
+```
+
+This builds the Intel runtime target, installs the Intel OpenCL compute driver, exposes
+`/dev/dri`, and sets `RETOUCH_EXECUTION=openvino` and `RETOUCH_OPENVINO_DEVICE=GPU`.
+The host must have a working Intel GPU kernel driver and `/dev/dri/renderD*`.
+The normal Compose command uses the CPU image.
+
+For a native Linux checkout, install your distribution's Intel compute runtime
+(Debian/Ubuntu: `intel-opencl-icd` and `ocl-icd-libopencl1`), then replace the CPU
+runtime **after** installing the app:
+
+```bash
+pip uninstall -y onnxruntime
+pip install onnxruntime-openvino==1.24.1
+RETOUCH_EXECUTION=openvino RETOUCH_OPENVINO_DEVICE=GPU python -m app
+```
+
+The user running the app needs access to the GPU render node (usually through the
+`render` group). Do not install the CPU and OpenVINO runtime distributions together:
+they supply the same Python module. Reinstall the OpenVINO runtime if a later app
+dependency installation restores the CPU package.
+
+OpenVINO accelerates the two Real-ESRGAN models. Scratch detection, LaMa scratch
+repair, colorization, face restoration, and ordinary image filters use the CPU.
+This avoids LaMa's dynamic-shape compilation failure on Intel GPUs.
+Unsupported graph operations can run on CPU, but a failed OpenVINO initialization is
+reported as a failed job rather than silently running the entire model on CPU.
+`GPU.0` selects a particular GPU; legacy `GPU_FP16` / `CPU_FP32` values are translated
+to current OpenVINO options. The default device without configuration is `CPU`.
+Initial model compilation can take longer than subsequent photos. Compare speed and
+output on your photos before committing to a large bulk run.
 
 ## How detection and uploads run
 
