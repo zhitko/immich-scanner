@@ -1,0 +1,93 @@
+<section class="panel">
+  <div class="section-head">
+    <div>
+      <h2>Bulk upload</h2>
+      <p class="lede">Upload photos across your scans to Immich.</p>
+    </div>
+    <a routerLink="/jobs">View jobs →</a>
+  </div>
+  @if (error()) {
+    <p class="banner warn" role="alert">{{ error() }}</p>
+  }
+  @if (notice()) {
+    <p class="banner" role="status">{{ notice() }}</p>
+  }
+  <div class="bulk-layout">
+    <fieldset class="bulk-options" [disabled]="starting()">
+      <legend>Photos to upload</legend>
+      <label class="check">
+        <input
+          type="checkbox"
+          [checked]="includeUploaded()"
+          (change)="setIncludeUploaded($any($event.target).checked)"
+        />
+        Include already uploaded photos
+      </label>
+      <p class="muted small">By default, only pending and failed uploads are included.</p>
+      @if (includeUploaded()) {
+        <p class="banner warn small">
+          Already uploaded photos will be processed again. Changed image versions may create new
+          assets in Immich; previous assets are not deleted.
+        </p>
+      }
+      <p class="muted small">
+        Each photo keeps its saved upload version, album, date, and metadata. Retouched versions
+        must be up to date; this does not run retouch or fall back to the original.
+      </p>
+      <p class="muted small">
+        Review your <a routerLink="/photos">photos</a> and configure the Immich connection under
+        <a routerLink="/settings">Settings</a> before starting.
+      </p>
+    </fieldset>
+    <div class="bulk-scope">
+      <div class="bulk-summary" aria-live="polite" [attr.aria-busy]="loading()">
+        @if (summaryError()) {
+          <p class="banner warn" role="alert">{{ summaryError() }}</p>
+        }
+        @if (summary(); as counts) {
+          <h3>{{ counts.eligible }} photos eligible</h3>
+          <p class="muted small">{{ counts.total }} photos across all scans.</p>
+          <dl>
+            <div>
+              <dt>Already uploaded skipped</dt>
+              <dd>{{ counts.uploaded }}</dd>
+            </div>
+            <div>
+              <dt>Queued, retouching, or uploading</dt>
+              <dd>{{ counts.busy }}</dd>
+            </div>
+            <div>
+              <dt>Source files unavailable</dt>
+              <dd>{{ counts.unavailable }}</dd>
+            </div>
+            <div>
+              <dt>Retouch version not ready</dt>
+              <dd>{{ counts.retouch_not_ready }}</dd>
+            </div>
+          </dl>
+        } @else if (loading()) {
+          <p class="muted">Counting photos…</p>
+        }
+        <button
+          type="button"
+          class="ghost"
+          (click)="refresh()"
+          [disabled]="loading() || starting()"
+        >
+          Refresh counts
+        </button>
+      </div>
+      <button type="button" (click)="run()" [disabled]="!canRun()">
+        @if (starting()) {
+          <span class="spinner" aria-hidden="true"></span>Queuing photos…
+        } @else {
+          Upload {{ summary()?.eligible ?? 0 }} photos to Immich
+        }
+      </button>
+      <p class="muted small">
+        Uploads run in the background, grouped by scan. You can leave this page. Counts are checked
+        again when you start. Scans with an active upload are skipped to avoid duplicates.
+      </p>
+    </div>
+  </div>
+</section>

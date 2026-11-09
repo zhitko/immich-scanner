@@ -266,6 +266,21 @@ class BulkRetouchSummary(BaseModel):
     queued: int = 0
 
 
+class BulkUploadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    include_uploaded: bool = False
+
+
+class BulkUploadSummary(BaseModel):
+    total: int = 0
+    eligible: int = 0
+    uploaded: int = 0
+    busy: int = 0
+    unavailable: int = 0
+    retouch_not_ready: int = 0
+    queued: int = 0
+
+
 class RetouchQueued(BaseModel):
     job_id: str
     region: RegionOut

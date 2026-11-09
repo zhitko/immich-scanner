@@ -5,6 +5,7 @@ import { Observable, map } from 'rxjs';
 import {
   Album,
   BulkRetouchSummary,
+  BulkUploadSummary,
   ConnectionTest,
   Job,
   MatchField,
@@ -151,6 +152,18 @@ export class ArchiveApi {
       choice,
       state,
       include_retouched: includeRetouched,
+    });
+  }
+
+  bulkUploadSummary(includeUploaded: boolean): Observable<BulkUploadSummary> {
+    return this.http.get<BulkUploadSummary>('/api/uploads/bulk', {
+      params: { include_uploaded: includeUploaded },
+    });
+  }
+
+  bulkUpload(includeUploaded: boolean): Observable<BulkUploadSummary> {
+    return this.http.post<BulkUploadSummary>('/api/uploads/bulk', {
+      include_uploaded: includeUploaded,
     });
   }
 

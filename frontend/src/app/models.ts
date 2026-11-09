@@ -262,6 +262,16 @@ export interface RetouchChoice {
   output_scale: 2 | 4;
 }
 
+export interface BulkUploadSummary {
+  total: number;
+  eligible: number;
+  uploaded: number;
+  busy: number;
+  unavailable: number;
+  retouch_not_ready: number;
+  queued: number;
+}
+
 export interface BulkRetouchSummary {
   total: number;
   eligible: number;

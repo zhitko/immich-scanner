@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import jobs, matching, photos, retouch, scans, statistics
+from app.api import jobs, matching, photos, retouch, scans, statistics, uploads
 from app.api import scanner as scanner_api
 from app.api import settings as settings_api
 from app.config import Settings, get_settings
@@ -64,6 +64,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(photos.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
     app.include_router(retouch.router, prefix="/api")
+    app.include_router(uploads.router, prefix="/api")
     app.include_router(settings_api.router, prefix="/api")
     app.include_router(statistics.router, prefix="/api")
     app.include_router(matching.router, prefix="/api")

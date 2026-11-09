@@ -22,6 +22,7 @@ describe('App', () => {
       'Scans',
       'Photos',
       'Retouch',
+      'Upload',
       'Matching',
       'Jobs',
       'Statistics',
