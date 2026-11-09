@@ -22,7 +22,7 @@ def test_contrast_deepens_faded_blacks_and_preserves_neutrality() -> None:
     ramp = np.tile(np.arange(110, 221, dtype=np.uint8), (32, 1))
     image = np.repeat(ramp[:, :, None], 3, axis=2)
     result = restore_contrast(image)
-    assert np.percentile(result, 5) < 30
+    assert np.percentile(result, 5) < 40
     assert np.percentile(result, 95) > 225
     np.testing.assert_array_equal(result[:, :, 0], result[:, :, 1])
     np.testing.assert_array_equal(result[:, :, 1], result[:, :, 2])
@@ -86,3 +86,17 @@ def test_contrast_reduces_local_veil_and_recovers_detail() -> None:
     assert after[~dark].mean() - after[dark].mean() > (
         before[~dark].mean() - before[dark].mean()
     ) * 1.1
+
+
+def test_contrast_keeps_detail_in_dark_subjects_on_bright_background() -> None:
+    # A thin textured dark band (a crowd) under a large bright sky, as in a
+    # faded print. Holding back the sky must not crush the crowd to black.
+    y, x = np.mgrid[:256, :384]
+    gray = np.full((256, 384), 212.0)
+    band = y >= 232
+    gray[band] = 76 + 14 * np.where((x[band] // 3) % 2, 1, -1)
+    gray[:2] = 40
+    image = np.repeat(np.rint(gray).astype(np.uint8)[:, :, None], 3, axis=2)
+    crowd = restore_contrast(image)[236:252, :, 0].astype(float)
+    assert crowd.mean() > 45
+    assert crowd.std() > 20

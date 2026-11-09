@@ -67,8 +67,9 @@ def restore_contrast(image: np.ndarray) -> np.ndarray:
 
     Half-percent tails ignore dust; a little headroom keeps highlight detail.
     Compress broad illumination differences after stretching the levels, lifting
-    shaded areas and holding back bright ones. Reduce locally raised shadows
-    from broad haze where neighboring detail supports it. Correction fades at black/white
+    shaded areas and holding back bright ones without darkening shadows. Reduce
+    locally raised shadows from broad haze where neighboring detail supports it,
+    then gently open the deepest tones. Correction fades at black/white
     and is capped to retain natural lighting and avoid harsh halos. Nearly flat
     scans are left alone; shared RGB adjustments keep grayscale neutral.
     """
@@ -102,10 +103,26 @@ def restore_contrast(image: np.ndarray) -> np.ndarray:
         # a shared additive adjustment (preserving channel differences).
         headroom = np.minimum(pixels.min(axis=2), 255 - pixels.max(axis=2)) / 255
         weight = 4 * headroom * (1 - headroom)
-        corrected = pixels + (correction[rows] * weight)[:, :, None]
+        local = correction[rows] * weight
+        # Holding back a bright surround must not sink dark subjects within it
+        # (faces in a crowd against snow): darkening only applies above shadows.
+        tone = np.clip((pixels.mean(axis=2) / 255 - 0.25) / 0.5, 0, 1)
+        local = np.where(local < 0, local * tone * tone, local)
+        corrected = pixels + local[:, :, None]
         # Remove an additive veil and expand the remaining range toward white.
         # Limit removal by the darkest channel to preserve color and true blacks.
         floor = np.minimum(haze[rows], corrected.min(axis=2) * 0.8)
         corrected = (corrected - floor[:, :, None]) * (255 / (255 - floor))[:, :, None]
-        result[rows] = np.clip(corrected, 0, 255)
+        result[rows] = _shadow_toe(np.clip(corrected, 0, 255))
     return as_byte_rgb(result) if source.dtype == np.uint8 else result
+
+
+def _shadow_toe(image: np.ndarray, strength: float = 0.5) -> np.ndarray:
+    """Open up deep shadows that the stretch compressed, keeping black at 0.
+
+    Monotonic for strength <= 1.5 and smoothly joins identity at mid-gray, so
+    highlights and midtones are untouched. Applied per channel; the lift is
+    small enough near black that neutral tones stay neutral.
+    """
+    u = np.clip(image / 128, 0, 1)
+    return image + strength * image * (1 - u) ** 2

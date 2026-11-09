@@ -116,7 +116,7 @@ def geometry_signature(region: Region) -> str:
 def expected_retouch_signature(region: Region) -> str:
     revision = "|scratch-v4" if region.retouch_scratches else ""
     if region.retouch_contrast:
-        revision += "|contrast-v2"
+        revision += "|contrast-v3"
     return f"{geometry_signature(region)}{revision}|{option_token(options_from_region(region))}"
 
 
