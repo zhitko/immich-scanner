@@ -61,7 +61,7 @@ def handle_upload(session: Session, job, services: Services) -> None:
     stored = load_settings(session)
     if not stored.immich_base_url or not stored.immich_api_key:
         raise ImmichError("Immich URL and API key are required")
-    image, _dpi = load_rgb(services.storage.absolute(scan.original_path))
+    image, _dpi = load_rgb(services.storage.absolute(scan.original_path), working=True)
     gateway = services.build_gateway(stored.immich_base_url, stored.immich_api_key)
     errors: list[str] = []
     try:

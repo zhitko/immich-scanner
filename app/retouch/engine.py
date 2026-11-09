@@ -5,6 +5,7 @@ from typing import Protocol
 import cv2
 import numpy as np
 
+from app.imaging.io import as_byte_rgb, as_float_rgb
 from app.retouch.catalog import CATALOG, ModelSpec, restoration_for, specs_for
 from app.retouch.cleanup import deblur, gentle_denoise, remove_dust
 from app.retouch.detection import learned_scratch_mask
@@ -81,7 +82,7 @@ class OnnxRetoucher:
         # Scratches, levels and color run on the crop. Scale and denoise are one
         # Real-ESRGAN pass after that: both networks emit 4×, so a second pass
         # would enlarge twice. Faces run last and see the image that will be saved.
-        result = image
+        result = as_float_rgb(image)
         if options.dust:
             _announce(on_stage, "Removing dust and small spots")
             result = remove_dust(result)
@@ -155,7 +156,7 @@ class OnnxRetoucher:
             )
         if budget is not None:
             budget.finish()
-        return np.ascontiguousarray(result)
+        return np.ascontiguousarray(as_byte_rgb(result) if image.dtype == np.uint8 else result)
 
     def _budget(
         self,
@@ -306,7 +307,7 @@ class OnnxRetoucher:
         soft[mask] = 1.0
         soft = soft[..., None]
         blended = filled.astype(np.float32) * soft + image.astype(np.float32) * (1.0 - soft)
-        return np.clip(blended, 0, 255).astype(np.uint8)
+        return np.clip(blended, 0, 255)
 
     def _faces(
         self,
@@ -388,7 +389,7 @@ def detect_faces(image: np.ndarray, model_path: Path) -> list[np.ndarray]:
         0.3,
         20,
     )
-    _faces_count, faces = detector.detect(cv2.cvtColor(working, cv2.COLOR_RGB2BGR))
+    _faces_count, faces = detector.detect(cv2.cvtColor(as_byte_rgb(working), cv2.COLOR_RGB2BGR))
     if faces is None:
         return []
     found: list[np.ndarray] = []

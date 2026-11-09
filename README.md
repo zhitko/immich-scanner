@@ -53,6 +53,8 @@ scanimage -L
 
 The default scan is the full bed: `scanimage` is called without `-x` or `-y`, so the backend's own scan area is used (about 216×297 mm on this model). Resolution defaults to 300 dpi and the file is a lossless TIFF. PNG and a smaller window, in millimetres, are available in settings. The source is left at the backend default, which is the flatbed rather than the transparency unit.
 
+Scans request `--depth=16` (16 bits per channel). The original TIFF/PNG retains those samples. Cropping and retouch use float32 RGB, preserving fractional levels through color/contrast restoration, neural output conversion and blending. Conversion to 8 bits happens when writing previews and final JPEG/PNG derivatives. Detection uses an 8-bit analysis copy; dust and scratch masks, face detection and non-local-means noise estimates do not replace the high-precision working image. A scanner backend that cannot accept 16-bit capture reports a scan error rather than silently falling back to 8 bits.
+
 ## Run from a checkout
 
 Python 3.12 and Node 22.
@@ -155,7 +157,7 @@ The Immich API key needs `asset.upload`, `asset.update`, `album.read`, and `albu
 
 Retouch is optional and runs on one photo at a time, after the crop is fixed and before upload. The CPU build of ONNX Runtime is the default. The untouched crop is kept under `data/scans/<id>/crops/`. The result is a separate file under `data/scans/<id>/retouch/`, with a new name for each run; the previous result is removed once the new one is saved. Upload sends the result only when that photo is set to upload the Retouched version.
 
-Retouch runs on the same single worker as detection and upload, so a slow retouch on the CPU holds up the jobs queued behind it. Upscaling stitches one row of tiles at a time, but the 4× result itself is held in memory: a 3000×2000 crop becomes a 12000×8000 image of about 290 MB. Denoise alone builds that enlargement and then resizes it back, so the saved file stays the crop size. The 4× image is still in memory during the pass.
+Retouch runs on the same single worker as detection and upload, so a slow retouch on the CPU holds up the jobs queued behind it. Upscaling stitches one row of tiles at a time, but the 4× float32 result itself is held in memory: a 3000×2000 crop becomes a 12000×8000 image of about 1.15 GB. Denoise alone builds that enlargement and then resizes it back, so the saved file stays the crop size. The 4× image is still in memory during the pass.
 
 The stages that are switched on run in this order: scratch repair, color-cast correction,
 contrast restoration, colorization, upscale/denoise, then face restoration.

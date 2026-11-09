@@ -54,7 +54,7 @@ def handle_retouch(session: Session, job: Job, services: Services) -> None:
     retouch_file = services.storage.absolute(retouch_relative)
     preview_file = retouch_preview_path(services, scan_id, region_id, retouch_relative)
     try:
-        image, _dpi = load_rgb(services.storage.absolute(original_path))
+        image, _dpi = load_rgb(services.storage.absolute(original_path), working=True)
         upright = upright_crop(
             image,
             center_x,

@@ -27,7 +27,7 @@ def tiled_map(
 ) -> np.ndarray:
     """Run `run` on tiles and stitch. `run` returns the same scale for every tile.
 
-    Blending happens one row of tiles at a time, so only the uint8 result is full size.
+    Blending happens one row of tiles at a time to bound temporary allocations.
     """
 
     if tile < 1:
@@ -42,7 +42,7 @@ def tiled_map(
     scale = scale_y
     size = tile * scale
     channels = image.shape[2]
-    stitched = np.empty((work_h * scale, work_w * scale, channels), dtype=np.uint8)
+    stitched = np.empty((work_h * scale, work_w * scale, channels), dtype=sample.dtype)
     window = _window(tile, overlap, scale)
     carried: tuple[np.ndarray, np.ndarray] | None = None
     for row, y in enumerate(starts_y):
@@ -63,7 +63,10 @@ def tiled_map(
             weights[:, origin_x : origin_x + size] += window
         done = (starts_y[row + 1] - y) * scale if row + 1 < len(starts_y) else size
         top = y * scale
-        stitched[top : top + done] = _normalize(strip[:done], weights[:done])
+        normalized = _normalize(strip[:done], weights[:done])
+        stitched[top : top + done] = (
+            np.rint(normalized) if stitched.dtype == np.uint8 else normalized
+        )
         carried = (strip[done:], weights[done:])
     return stitched[: height * scale, : width * scale]
 
@@ -119,8 +122,8 @@ def masked_tiles(
             weights[index] += weight
             if on_tile is not None:
                 on_tile()
-    filled = np.clip(np.rint(total / np.maximum(weights, 1e-6)[:, None]), 0, 255)
-    result.reshape(-1, channels)[flat] = filled.astype(np.uint8)
+    filled = np.clip(total / np.maximum(weights, 1e-6)[:, None], 0, 255)
+    result.reshape(-1, channels)[flat] = np.rint(filled) if result.dtype == np.uint8 else filled
     return result[:height, :width]
 
 
@@ -205,8 +208,7 @@ def colorizer_tone(image: np.ndarray) -> np.ndarray:
     for index in range(1, len(src)):
         if src[index] <= src[index - 1]:
             src[index] = src[index - 1] + 1e-3
-    lut = np.interp(np.arange(256), src, _TONE_LEVELS)
-    mapped = np.clip(lut, 0, 255).astype(np.uint8)[gray]
+    mapped = np.clip(np.interp(gray, src, _TONE_LEVELS), 0, 255).astype(np.float32)
     return np.repeat(mapped[:, :, None], 3, axis=2)
 
 
@@ -246,7 +248,7 @@ def paste_face(image: np.ndarray, matrix: np.ndarray, restored: np.ndarray) -> n
     soft = cv2.warpAffine(_face_mask(), inverse, (width, height), flags=cv2.INTER_LINEAR)
     alpha = soft[..., None]
     blended = warped.astype(np.float32) * alpha + image.astype(np.float32) * (1.0 - alpha)
-    return np.clip(blended, 0, 255).astype(np.uint8)
+    return np.clip(blended, 0, 255)
 
 
 def as_nchw(image: np.ndarray) -> np.ndarray:
@@ -264,19 +266,19 @@ def from_model(output: np.ndarray) -> np.ndarray:
 
 
 def unit_to_rgb(image: np.ndarray) -> np.ndarray:
-    """A 0..1 model output to uint8. Overshoot is clipped."""
+    """A 0..1 model output to working float RGB. Overshoot is clipped."""
 
-    return np.clip(np.rint(image * 255.0), 0, 255).astype(np.uint8)
+    return np.clip(image * 255.0, 0, 255).astype(np.float32)
 
 
 def byte_to_rgb(image: np.ndarray) -> np.ndarray:
-    """A 0..255 model output to uint8."""
+    """A 0..255 model output to working float RGB."""
 
-    return np.clip(np.rint(image), 0, 255).astype(np.uint8)
+    return np.clip(image, 0, 255).astype(np.float32)
 
 
 def _normalize(total: np.ndarray, weights: np.ndarray) -> np.ndarray:
-    return np.clip(np.rint(total / np.maximum(weights, 1e-6)), 0, 255).astype(np.uint8)
+    return np.clip(total / np.maximum(weights, 1e-6), 0, 255)
 
 
 def _face_mask() -> np.ndarray:

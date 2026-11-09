@@ -34,6 +34,7 @@ def test_full_bed_command_omits_geometry() -> None:
         "--format=tiff",
         "--resolution=600",
         "--mode=Color",
+        "--depth=16",
         "--output-file=/data/captures/last-scan.tif",
         "--device-name",
         "genesys:libusb:002:006",

@@ -3,9 +3,11 @@
 import cv2
 import numpy as np
 
+from app.imaging.io import as_byte_rgb, as_float_rgb
+
 
 def _sample(image: np.ndarray) -> np.ndarray:
-    # Bound statistics work on large scans; the LUT still runs at full resolution.
+    # Bound statistics work on large scans; corrections run at full resolution.
     height, width = image.shape[:2]
     scale = min(1.0, 1024 / max(height, width))
     if scale == 1.0:
@@ -26,18 +28,21 @@ def correct_color_cast(image: np.ndarray) -> np.ndarray:
     brightness remains near the scan. Cap gain and skip nearly flat channels to
     avoid amplifying scanner noise in blank prints or missing color information.
     """
+    source = image
+    image = as_float_rgb(image)
     sample = _sample(image)
     low, high = np.percentile(sample.reshape(-1, 3), (1, 99), axis=0)
     span = high - low
     if np.min(span) < 12:
-        return image.copy()
+        return source.copy()
     target_low, target_high = float(np.mean(low)), float(np.mean(high))
     gain = np.clip((target_high - target_low) / span, 0.5, 3.0)
     midpoint = (low + high) / 2
     target_midpoint = (target_low + target_high) / 2
-    values = np.arange(256, dtype=np.float32)[:, None]
-    lut = np.rint(np.clip((values - midpoint) * gain + target_midpoint, 0, 255))
-    return cv2.LUT(image, lut.astype(np.uint8).reshape(256, 1, 3))
+    result = np.clip(
+        (image - midpoint.astype(np.float32)) * gain.astype(np.float32) + target_midpoint, 0, 255
+    ).astype(np.float32)
+    return as_byte_rgb(result) if source.dtype == np.uint8 else result
 
 
 def _haze_floor(sample: np.ndarray) -> np.ndarray:
@@ -67,18 +72,18 @@ def restore_contrast(image: np.ndarray) -> np.ndarray:
     and is capped to retain natural lighting and avoid harsh halos. Nearly flat
     scans are left alone; shared RGB adjustments keep grayscale neutral.
     """
+    source = image
+    image = as_float_rgb(image)
     gray = cv2.cvtColor(_sample(image), cv2.COLOR_RGB2GRAY)
     low, high = np.percentile(gray, (0.5, 99.5))
     span = float(high - low)
     if span < 12:
-        return image.copy()
+        return source.copy()
     target_low, target_high = min(float(low), 8.0), max(float(high), 247.0)
     gain = min((target_high - target_low) / span, 4.0)
     midpoint = (float(low) + float(high)) / 2
     target_midpoint = (target_low + target_high) / 2
-    values = np.arange(256, dtype=np.float32)
-    lut = np.rint(np.clip((values - midpoint) * gain + target_midpoint, 0, 255))
-    stretched = cv2.LUT(image, lut.astype(np.uint8))
+    stretched = np.clip((image - midpoint) * gain + target_midpoint, 0, 255)
     # Estimate illumination at bounded resolution; a broad blur ignores grain
     # and small features. Scaling the radius with the image makes this DPI-independent.
     sample = cv2.cvtColor(_sample(stretched), cv2.COLOR_RGB2GRAY).astype(np.float32)
@@ -102,5 +107,5 @@ def restore_contrast(image: np.ndarray) -> np.ndarray:
         # Limit removal by the darkest channel to preserve color and true blacks.
         floor = np.minimum(haze[rows], corrected.min(axis=2) * 0.8)
         corrected = (corrected - floor[:, :, None]) * (255 / (255 - floor))[:, :, None]
-        result[rows] = np.rint(np.clip(corrected, 0, 255)).astype(np.uint8)
-    return result
+        result[rows] = np.clip(corrected, 0, 255)
+    return as_byte_rgb(result) if source.dtype == np.uint8 else result

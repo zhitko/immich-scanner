@@ -4,6 +4,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from app.imaging.io import as_byte_rgb
+
 _SHORT_SIDE = 256
 _CONFIDENCE = 0.7
 _EDGE_CONFIDENCE = 0.2
@@ -22,7 +24,7 @@ def scratch_probabilities(
     scale = short_side / min(height, width)
     size = (max(16, round(width * scale / 16) * 16), max(16, round(height * scale / 16) * 16))
     # Match the upstream PIL resize -> grayscale -> [-1, 1] preprocessing.
-    gray = Image.fromarray(image).resize(size, Image.Resampling.BICUBIC).convert("L")
+    gray = Image.fromarray(as_byte_rgb(image)).resize(size, Image.Resampling.BICUBIC).convert("L")
     tensor = (np.asarray(gray, dtype=np.float32) / 127.5 - 1.0)[None, None]
     output = np.asarray(session.run(None, {session.get_inputs()[0].name: tensor})[0])
     if output.shape != (1, 1, size[1], size[0]):

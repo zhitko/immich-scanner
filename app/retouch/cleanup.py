@@ -3,6 +3,8 @@
 import cv2
 import numpy as np
 
+from app.imaging.io import as_byte_rgb
+
 
 def remove_dust(image: np.ndarray) -> np.ndarray:
     """Repair isolated high-contrast specks in otherwise quiet surroundings.
@@ -10,7 +12,7 @@ def remove_dust(image: np.ndarray) -> np.ndarray:
     A fixed small footprint deliberately leaves larger marks to scratch repair.
     Compact components and a quiet surrounding ring avoid most edges and grain.
     """
-    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    gray = cv2.cvtColor(as_byte_rgb(image), cv2.COLOR_RGB2GRAY)
     background = cv2.medianBlur(gray, 7)
     residual = cv2.absdiff(gray, background)
     candidates = (residual >= 32).astype(np.uint8)
@@ -30,16 +32,28 @@ def remove_dust(image: np.ndarray) -> np.ndarray:
         mask[y : y + h, x : x + w][labels[y : y + h, x : x + w] == label] = 255
     if not mask.any():
         return image.copy()
-    return cv2.inpaint(image, mask, 2, cv2.INPAINT_TELEA)
+    if image.dtype == np.uint8:
+        return cv2.inpaint(image, mask, 2, cv2.INPAINT_TELEA)
+    return np.clip(
+        np.stack(
+            [cv2.inpaint(image[..., channel], mask, 2, cv2.INPAINT_TELEA) for channel in range(3)],
+            axis=2,
+        ),
+        0,
+        255,
+    )
 
 
 def gentle_denoise(image: np.ndarray) -> np.ndarray:
     """Small-window non-local means at source size, blended to retain texture."""
-    bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    clean = cv2.cvtColor(
-        cv2.fastNlMeansDenoisingColored(bgr, None, 3, 3, 7, 15), cv2.COLOR_BGR2RGB
-    )
-    return cv2.addWeighted(image, 0.25, clean, 0.75, 0)
+    proxy = as_byte_rgb(image)
+    bgr = cv2.cvtColor(proxy, cv2.COLOR_RGB2BGR)
+    clean = cv2.cvtColor(cv2.fastNlMeansDenoisingColored(bgr, None, 3, 3, 7, 15), cv2.COLOR_BGR2RGB)
+    if image.dtype == np.uint8:
+        return cv2.addWeighted(image, 0.25, clean, 0.75, 0)
+    # NLM requires bytes. Apply its estimated noise residual to the float
+    # source so quantization of the analysis copy cannot erase scan precision.
+    return np.clip(image + 0.75 * (clean.astype(np.float32) - proxy), 0, 255)
 
 
 def deblur(image: np.ndarray) -> np.ndarray:
@@ -64,5 +78,6 @@ def deblur(image: np.ndarray) -> np.ndarray:
         detail = np.clip(estimate - observed, -0.06, 0.06)
         lab[..., 0] = np.clip(observed + 0.5 * detail, 0, 1) * 100
         restored = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
-        result[start:end] = np.rint(np.clip(restored[start - top : end - top], 0, 1) * 255)
+        pixels = np.clip(restored[start - top : end - top], 0, 1) * 255
+        result[start:end] = np.rint(pixels) if image.dtype == np.uint8 else pixels
     return result

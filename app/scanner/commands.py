@@ -19,6 +19,7 @@ def build_scan_command(request: ScanRequest, destination: Path) -> list[str]:
         f"--format={request.image_format}",
         f"--resolution={request.resolution_dpi}",
         f"--mode={request.mode}",
+        "--depth=16",
         f"--output-file={destination}",
     ]
     if request.device_name:
