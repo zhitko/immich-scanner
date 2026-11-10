@@ -60,6 +60,40 @@ def test_client_matches_the_v3_asset_contract() -> None:
     client.close()
 
 
+@pytest.mark.parametrize("error_field", ["error", "errorMessage"])
+def test_album_add_accepts_existing_membership(error_field: str) -> None:
+    def respond(request):
+        assert request.method == "PUT"
+        assert request.url.path == "/api/albums/album/assets"
+        return httpx.Response(200, json=[
+            {"id": "existing", "success": False, error_field: "duplicate"},
+            {"id": "new", "success": True},
+        ])
+
+    with httpx.Client(
+        base_url="http://immich/api", transport=httpx.MockTransport(respond)
+    ) as http:
+        client = ImmichClient("http://unused.example", "test-key", http=http)
+        client.add_assets_to_album("album", ["existing", "new"])
+
+
+@pytest.mark.parametrize("error_field", ["error", "errorMessage"])
+@pytest.mark.parametrize("reason", ["not_found", "no_permission", None])
+def test_album_add_still_rejects_other_failures(error_field: str, reason: str | None) -> None:
+    def respond(request):
+        return httpx.Response(200, json=[
+            {"id": "existing", "success": False, "error": "duplicate"},
+            {"id": "failed", "success": False, error_field: reason},
+        ])
+
+    with httpx.Client(
+        base_url="http://immich/api", transport=httpx.MockTransport(respond)
+    ) as http:
+        client = ImmichClient("http://unused.example", "test-key", http=http)
+        with pytest.raises(ImmichError, match=reason or "unknown"):
+            client.add_assets_to_album("album", ["existing", "failed"])
+
+
 def test_mock_rejects_an_upload_missing_required_fields() -> None:
     reset_store()
     http = TestClient(create_mock_app(), base_url="http://immich/api")

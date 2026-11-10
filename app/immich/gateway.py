@@ -60,7 +60,7 @@ class ImmichGateway(Protocol):
         """Upload a replacement, copy associations, and trash the previous asset."""
 
     def add_assets_to_album(self, album_id: str, asset_ids: list[str]) -> None:
-        """Add assets to one album."""
+        """Ensure assets belong to one album; existing membership is success."""
 
     def update_asset(self, asset_id: str, metadata: AssetMetadata) -> None:
         """Write description, date, rating, favorite, and location."""

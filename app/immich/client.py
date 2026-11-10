@@ -95,7 +95,14 @@ class ImmichClient:
         body = self._json("PUT", f"/albums/{album_id}/assets", json={"ids": asset_ids})
         if not isinstance(body, list):
             raise ImmichError("album update did not return a result list")
-        failed = [item for item in body if not item.get("success", False)]
+        # Reuploads may reuse an existing asset or copy its album memberships.
+        # An asset already in the album satisfies the requested operation.
+        failed = [
+            item
+            for item in body
+            if not item.get("success", False)
+            and (item.get("error") or item.get("errorMessage")) != "duplicate"
+        ]
         if failed:
             reason = failed[0].get("error") or failed[0].get("errorMessage") or "unknown"
             raise ImmichError(f"could not add the asset to the album ({reason})")
