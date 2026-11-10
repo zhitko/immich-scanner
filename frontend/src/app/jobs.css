@@ -1,0 +1,26 @@
+.job-statistics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.job-statistics > div {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.job-statistics dd {
+  margin: 8px 0 0;
+  font-size: 1.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .job-statistics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

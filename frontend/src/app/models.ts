@@ -148,6 +148,13 @@ export interface ScanDetail extends ScanSummary {
   regions: Region[];
 }
 
+export interface JobStatistics {
+  queued: number;
+  running: number;
+  finished: number;
+  failed: number;
+}
+
 export interface Job {
   id: string;
   type: string;

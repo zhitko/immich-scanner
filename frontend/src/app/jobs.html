@@ -17,6 +17,21 @@
     <p class="banner warn" role="alert">{{ error() }}</p>
   }
 
+  <dl
+    class="job-statistics"
+    aria-label="All job statistics"
+    [attr.aria-busy]="statistics() === null"
+  >
+    @for (item of summaryStatuses; track item) {
+      <div>
+        <dt>
+          <span class="pill" [attr.data-status]="item">{{ item }}</span>
+        </dt>
+        <dd>{{ statistics() === null ? '—' : (statistics()![item] | number) }}</dd>
+      </div>
+    }
+  </dl>
+
   @if (jobs() === null) {
     <p class="muted">Loading jobs…</p>
   } @else if (jobs()!.length === 0) {

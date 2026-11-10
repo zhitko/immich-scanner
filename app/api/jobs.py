@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_session
 from app.models import Job
-from app.schemas import JobOut
+from app.schemas import JobOut, JobStatistics
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -19,6 +19,13 @@ def list_jobs(status: str | None = None, session: Session = Depends(get_session)
             raise HTTPException(status_code=422, detail="unknown job status")
         query = query.where(Job.status == status)
     return [_job_out(job) for job in session.scalars(query)]
+
+
+@router.get("/statistics", response_model=JobStatistics)
+def job_statistics(session: Session = Depends(get_session)) -> JobStatistics:
+    query = select(Job.status, func.count(Job.id)).group_by(Job.status)
+    counts = dict(session.execute(query).all())
+    return JobStatistics(**{status: counts.get(status, 0) for status in _STATUSES})
 
 
 @router.get("/{job_id}", response_model=JobOut)

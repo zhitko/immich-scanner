@@ -316,6 +316,13 @@ class ModelFetch(BaseModel):
     force: bool = False
 
 
+class JobStatistics(BaseModel):
+    queued: int = 0
+    running: int = 0
+    finished: int = 0
+    failed: int = 0
+
+
 class JobOut(BaseModel):
     id: str
     type: str

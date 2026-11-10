@@ -8,6 +8,7 @@ import {
   BulkUploadSummary,
   ConnectionTest,
   Job,
+  JobStatistics,
   MatchField,
   MatchingStatus,
   Photo,
@@ -191,6 +192,10 @@ export class ArchiveApi {
 
   listJobs(status?: string): Observable<Job[]> {
     return this.http.get<Job[]>('/api/jobs', { params: status ? { status } : {} });
+  }
+
+  jobStatistics(): Observable<JobStatistics> {
+    return this.http.get<JobStatistics>('/api/jobs/statistics');
   }
 
   getJob(id: string): Observable<Job> {

@@ -1,19 +1,25 @@
+import { DecimalPipe } from '@angular/common';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { forkJoin } from 'rxjs';
 
 import { ArchiveApi, httpError } from './api';
-import { Job } from './models';
+import { Job, JobStatistics } from './models';
 import { formatStamp } from './time';
 
 @Component({
   selector: 'app-jobs',
-  imports: [RouterLink],
+  imports: [DecimalPipe, RouterLink],
   templateUrl: './jobs.html',
+  styleUrl: './jobs.css',
 })
 export class JobsPage {
   private readonly api = inject(ArchiveApi);
+  private requestId = 0;
 
-  readonly statuses = ['', 'queued', 'running', 'finished', 'failed'] as const;
+  readonly summaryStatuses = ['queued', 'running', 'finished', 'failed'] as const;
+  readonly statuses = ['', ...this.summaryStatuses] as const;
+  readonly statistics = signal<JobStatistics | null>(null);
   readonly status = signal('');
   readonly jobs = signal<Job[] | null>(null);
   readonly error = signal('');
@@ -62,12 +68,20 @@ export class JobsPage {
   }
 
   private load(): void {
-    this.api.listJobs(this.status() || undefined).subscribe({
-      next: (jobs) => {
+    const requestId = ++this.requestId;
+    forkJoin({
+      jobs: this.api.listJobs(this.status() || undefined),
+      statistics: this.api.jobStatistics(),
+    }).subscribe({
+      next: ({ jobs, statistics }) => {
+        if (requestId !== this.requestId) return;
         this.jobs.set(jobs);
+        this.statistics.set(statistics);
         this.error.set('');
       },
-      error: (error: unknown) => this.error.set(httpError(error)),
+      error: (error: unknown) => {
+        if (requestId === this.requestId) this.error.set(httpError(error));
+      },
     });
   }
 }

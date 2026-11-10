@@ -3,6 +3,28 @@ from app.jobs.queue import enqueue_job
 from app.models import Job
 
 
+def test_job_statistics_empty(client) -> None:
+    response = client.get("/api/jobs/statistics")
+    assert response.status_code == 200
+    assert response.json() == {"queued": 0, "running": 0, "finished": 0, "failed": 0}
+
+
+def test_job_statistics_count_all_jobs(client, app_bundle) -> None:
+    _app, services = app_bundle
+    with services.session_factory() as session:
+        for status, count in (("queued", 3), ("running", 1), ("finished", 205), ("failed", 2)):
+            for index in range(count):
+                session.add(
+                    Job(id=f"{status}-{index}", type="detect", status=status, created_at=utcnow())
+                )
+        session.commit()
+
+    assert len(client.get("/api/jobs").json()) == 200
+    response = client.get("/api/jobs/statistics")
+    assert response.status_code == 200
+    assert response.json() == {"queued": 3, "running": 1, "finished": 205, "failed": 2}
+
+
 def test_worker_prioritizes_upload_and_detection_in_queue_order(app_bundle, monkeypatch) -> None:
     app, services = app_bundle
     processed = []
