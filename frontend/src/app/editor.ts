@@ -1090,7 +1090,7 @@ export class EditorPage {
           const filters = this.route.snapshot.queryParamMap
             .getAll('filter')
             .filter((value): value is PhotoFilter =>
-              ['original', 'retouched', 'has-date'].includes(value),
+              ['original', 'retouched', 'has-date', 'no-date'].includes(value),
             );
           const items: Observable<{ id: string }[]> = this.photoMode
             ? this.api.listPhotos(photoState, filters)

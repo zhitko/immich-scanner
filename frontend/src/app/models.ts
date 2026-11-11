@@ -83,7 +83,7 @@ export interface Region {
   updated_at: string;
 }
 
-export type PhotoFilter = 'original' | 'retouched' | 'has-date';
+export type PhotoFilter = 'original' | 'retouched' | 'has-date' | 'no-date';
 
 export interface Photo extends Region {
   scan_id: string;

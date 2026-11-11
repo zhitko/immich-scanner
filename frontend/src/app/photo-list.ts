@@ -27,6 +27,7 @@ export class PhotoListPage {
     { value: 'original', label: 'Original' },
     { value: 'retouched', label: 'Retouched' },
     { value: 'has-date', label: 'Has date' },
+    { value: 'no-date', label: 'Has no date' },
   ];
   readonly mode = signal<'open' | 'uploaded' | 'all'>('open');
   readonly selectedFilters = signal<PhotoFilter[]>([]);

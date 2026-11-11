@@ -89,6 +89,29 @@ describe('PhotoListPage', () => {
     expect(harness.routeNativeElement!.textContent).toContain('No photos match');
   });
 
+  it('restores and toggles Has no date alongside Has date', async () => {
+    const harness = await RouterTestingHarness.create('/photos?status=all&filter=no-date');
+    http.expectOne('/api/photos?state=all&filters=no-date').flush([{ id: 'photo-1' }]);
+    harness.detectChanges();
+    const checkboxes = [
+      ...harness.routeNativeElement!.querySelectorAll<HTMLInputElement>('.photo-filters input'),
+    ];
+    expect(checkboxes[3].checked).toBe(true);
+    expect(checkboxes[3].parentElement?.textContent).toContain('Has no date');
+    expect(harness.routeNativeElement!.querySelector('.card-title')?.getAttribute('href')).toBe(
+      '/photos/photo-1?status=all&filter=no-date',
+    );
+    checkboxes[2].click();
+    await harness.fixture.whenStable();
+    http.expectOne('/api/photos?state=all&filters=has-date&filters=no-date').flush([]);
+    harness.detectChanges();
+    expect(checkboxes[2].checked).toBe(true);
+    expect(checkboxes[3].checked).toBe(true);
+    checkboxes[3].click();
+    await harness.fixture.whenStable();
+    http.expectOne('/api/photos?state=all&filters=has-date').flush([]);
+  });
+
   it('uses the current upload version and the correct rotation for thumbnails', async () => {
     const harness = await RouterTestingHarness.create('/photos');
     http.expectOne('/api/photos?state=open').flush([]);

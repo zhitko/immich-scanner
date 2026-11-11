@@ -44,6 +44,17 @@ def test_photo_filters_apply_to_individual_photos(client, app_bundle):
     assert ids("?state=all&filters=has-date") == [original_id, retouched_id]
     assert ids("?state=all&filters=original&filters=has-date") == [original_id]
     assert ids("?filters=retouched&filters=has-date") == [retouched_id]
+    assert ids("?filters=no-date") == [stale_id]
+    assert ids("?state=all&filters=no-date") == [stale_id]
+    assert ids("?state=uploaded&filters=no-date") == []
+    assert ids("?state=all&filters=original&filters=no-date") == [stale_id]
+    assert ids("?state=all&filters=retouched&filters=no-date") == []
+    assert ids("?state=all&filters=has-date&filters=no-date") == [
+        original_id,
+        retouched_id,
+        stale_id,
+    ]
+    assert ids("?filters=retouched&filters=has-date&filters=no-date") == [retouched_id]
     assert client.get("/api/photos?state=invalid").status_code == 422
     assert client.get("/api/photos?filters=invalid").status_code == 422
     photo = client.get(f"/api/photos/{retouched_id}").json()

@@ -93,6 +93,25 @@ describe('Photo editor', () => {
     upload.flush({ job_id: 'upload-1' });
   });
 
+  it('keeps Has no date when loading photo navigation and returning to the list', async () => {
+    const harness = await RouterTestingHarness.create('/photos/photo-2?filter=no-date');
+    http.expectOne('/api/photos/photo-2?apply_defaults=true').flush(detail);
+    http.expectOne('/api/photos?state=open&filters=no-date').flush([{ id: 'photo-2' }]);
+    http.expectOne('/api/immich/albums').flush([]);
+    http.expectOne('/api/settings').flush({ immich_base_url: '' });
+    http.expectOne('/api/retouch/models').flush([]);
+    harness.detectChanges();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const editor = harness.routeDebugElement!.componentInstance as EditorPage;
+    editor.removeRegion();
+    http
+      .expectOne('/api/scans/scan-1/regions/photo-2')
+      .flush(null, { status: 204, statusText: 'No Content' });
+    await harness.fixture.whenStable();
+    http.expectOne('/api/photos?state=open&filters=no-date').flush([]);
+    expect(TestBed.inject(Router).url).toBe('/photos?filter=no-date');
+  });
+
   it('enables reupload for an already uploaded photo without local changes', async () => {
     const harness = await open({
       ...detail,

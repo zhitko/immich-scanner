@@ -16,7 +16,9 @@ router = APIRouter(prefix="/photos", tags=["photos"])
 @router.get("", response_model=list[PhotoOut])
 def list_photos(
     state: Literal["open", "uploaded", "all"] = "open",
-    filters: Annotated[list[Literal["original", "retouched", "has-date"]] | None, Query()] = None,
+    filters: Annotated[
+        list[Literal["original", "retouched", "has-date", "no-date"]] | None, Query()
+    ] = None,
     session: Session = Depends(get_session),
 ) -> list[PhotoOut]:
     filters = filters or []
@@ -29,8 +31,11 @@ def list_photos(
         query = query.where(Region.upload_status == "uploaded")
     elif state == "open":
         query = query.where(Region.upload_status != "uploaded")
-    if "has-date" in filters:
+    dates = set(filters) & {"has-date", "no-date"}
+    if dates == {"has-date"}:
         query = query.where(Region.taken_at.is_not(None))
+    elif dates == {"no-date"}:
+        query = query.where(Region.taken_at.is_(None))
     versions = set(filters) & {"original", "retouched"}
     photos = []
     for region, scan in session.execute(query):
