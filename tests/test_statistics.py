@@ -104,6 +104,8 @@ def test_statistics_counts_photos_without_multiplying_scans(client, app_bundle) 
         "retouched_dust": 0,
         "retouched_deblur": 0,
         "retouched_gentle_denoise": 0,
+        "retouched_paper_mesh": 0,
+        "retouched_paper_embossed": 0,
         "first_scan_at": "2025-01-01T00:00:00Z",
         "latest_scan_at": "2026-11-01T00:00:00Z",
         "earliest_photo_at": "1999-06-12T00:00:00Z",
@@ -204,6 +206,8 @@ def test_statistics_retouch_counts_completed_results_not_selected_options(
         "retouched_dust": 1,
         "retouched_deblur": 1,
         "retouched_gentle_denoise": 1,
+        "retouched_paper_mesh": 0,
+        "retouched_paper_embossed": 0,
     }
     assert client.delete("/api/scans/retouched").status_code == 204
     assert client.get("/api/statistics").json()["retouched"] == 0

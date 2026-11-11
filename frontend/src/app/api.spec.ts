@@ -32,6 +32,8 @@ describe('ArchiveApi', () => {
     retouch_dust: false,
     retouch_deblur: false,
     retouch_gentle_denoise: false,
+    retouch_paper_mesh: false,
+    retouch_paper_embossed: false,
     retouch_output_scale: 4,
   };
 
@@ -125,6 +127,8 @@ describe('ArchiveApi', () => {
         dust: true,
         deblur: true,
         gentle_denoise: true,
+        paper_mesh: false,
+        paper_embossed: false,
         output_scale: 2,
       })
       .subscribe((body) => expect(body.job_id).toBe('job-9'));
@@ -141,6 +145,8 @@ describe('ArchiveApi', () => {
       dust: true,
       deblur: true,
       gentle_denoise: true,
+      paper_mesh: false,
+      paper_embossed: false,
       output_scale: 2,
     });
     request.flush({ job_id: 'job-9', region: {} });

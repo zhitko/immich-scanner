@@ -193,7 +193,21 @@
       </fieldset>
 
       <fieldset class="group">
-        <legend>Processing</legend>
+        <legend>Processing <app-help-tip label="Processing defaults">
+          New photos start with these stages selected. Retouch still runs one photo at a time, and
+          only when you ask for that photo. Opening a photo or scan also applies these defaults
+          to photos that have not been retouched yet. Retouched photos keep their own stages.
+        </app-help-tip></legend>
+        <label class="check">
+          <input type="checkbox" [checked]="settings.retouch_paper_mesh"
+            (change)="setStep('retouch_paper_mesh', $any($event.target).checked)" />
+          Reduce repeating paper texture
+        </label>
+        <label class="check">
+          <input type="checkbox" [checked]="settings.retouch_paper_embossed"
+            (change)="setStep('retouch_paper_embossed', $any($event.target).checked)" />
+          Reduce embossed paper texture (medium)
+        </label>
         <label class="check">
           <input type="checkbox" [checked]="settings.retouch_dust"
             (change)="setStep('retouch_dust', $any($event.target).checked)" />
@@ -204,20 +218,16 @@
             (change)="setStep('retouch_gentle_denoise', $any($event.target).checked)" />
           Gentle denoise (native resolution)
         </label>
-        <label class="check">
+        <div class="help-row"><label class="check">
           <input type="checkbox" [checked]="settings.retouch_deblur"
             (change)="setStep('retouch_deblur', $any($event.target).checked)" />
           Deblur mild softness
         </label>
-        <p class="hint">
+        <app-help-tip label="Native cleanup stages">
           These stages need no model download. Dust removal targets tiny isolated marks;
           deblur reduces mild defocus. Gentle denoise preserves more texture than strong AI denoise.
-        </p>
-        <p class="hint">
-          New photos start with these stages selected. Retouch still runs one photo at a time, and
-          only when you ask for that photo. Opening a photo or scan also applies these defaults
-          to photos that have not been retouched yet. Retouched photos keep their own stages.
-        </p>
+        </app-help-tip>
+        </div>
         <label class="check">
           <input
             type="checkbox"
@@ -234,7 +244,7 @@
           />
           Correct color cast
         </label>
-        <label class="check">
+        <div class="help-row"><label class="check">
           <input
             type="checkbox"
             [checked]="settings.retouch_contrast"
@@ -242,10 +252,11 @@
           />
           Restore contrast
         </label>
-        <p class="hint">
+        <app-help-tip label="Color and contrast help">
           Balance faded color prints and restore washed-out black/white levels. These stages run
           before colorization and need no model download.
-        </p>
+        </app-help-tip>
+        </div>
         <label class="check">
           <input
             type="checkbox"
@@ -263,7 +274,7 @@
             <option value="4">4× — AI upscale</option>
           </select>
         </label>
-        <label class="check">
+        <div class="help-row"><label class="check">
           <input
             type="checkbox"
             [checked]="settings.retouch_denoise"
@@ -271,11 +282,12 @@
           />
           Strong AI denoise
         </label>
-        <p class="hint">
+        <app-help-tip label="AI enlargement and denoise help">
           Real-ESRGAN AI enlargement runs a 4× network, then resizes to the selected output size.
           Strong AI denoise uses its denoising network once, including at original output size.
-        </p>
-        <label class="check">
+        </app-help-tip>
+        </div>
+        <div class="help-row"><label class="check">
           <input
             type="checkbox"
             [checked]="settings.retouch_faces"
@@ -283,16 +295,17 @@
           />
           Restore faces
         </label>
-        <p class="hint">
+        <app-help-tip label="Face restoration help">
           Invents detail that was not on the print. The preview is marked as a reconstruction.
-        </p>
+        </app-help-tip>
+        </div>
 
         <div class="model-list">
-          <p class="hint">
+          <app-help-tip label="Model downloads help">
             Weights stay out of the project. A download runs only after you accept that model's
             license, including when a current file is downloaded again. Each file is an ONNX
             conversion of the official weights, checked against a pinned checksum.
-          </p>
+          </app-help-tip>
           @if (models(); as models) {
             @for (model of models; track model.id) {
               <article class="model-card">

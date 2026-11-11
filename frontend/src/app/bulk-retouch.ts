@@ -4,11 +4,12 @@ import { RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 
 import { ArchiveApi, httpError } from './api';
+import { HelpTip } from './help-tip';
 import { BulkRetouchSummary, RetouchChoice } from './models';
 
 @Component({
   selector: 'app-bulk-retouch',
-  imports: [RouterLink],
+  imports: [RouterLink, HelpTip],
   templateUrl: './bulk-retouch.html',
   styleUrl: './bulk-retouch.css',
 })
@@ -36,6 +37,8 @@ export class BulkRetouchPage {
     dust: false,
     deblur: false,
     gentle_denoise: false,
+    paper_mesh: false,
+    paper_embossed: false,
     output_scale: 4,
   });
   readonly stages: {
@@ -43,6 +46,8 @@ export class BulkRetouchPage {
     label: string;
   }[] = [
     { key: 'dust', label: 'Remove dust and small spots' },
+    { key: 'paper_mesh', label: 'Reduce repeating paper texture' },
+    { key: 'paper_embossed', label: 'Reduce embossed paper texture (medium)' },
     { key: 'gentle_denoise', label: 'Gentle denoise (native resolution)' },
     { key: 'deblur', label: 'Deblur mild softness' },
     { key: 'scratches', label: 'Fill scratches' },

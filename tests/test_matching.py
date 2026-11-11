@@ -163,7 +163,7 @@ def test_copy_individual_fields_preserves_existing_metadata_and_marks_for_sync(c
         photo = result.json()
         assert photo["description"] == "Existing caption"
         assert photo["needs_upload"] is True
-        assert photo["upload_status"] == "uploaded"
+        assert photo["upload_status"] == "pending"
         assert copy(client, pair, field).status_code == 409
     photo = client.get(f"/api/photos/{target}").json()["regions"][0]
     assert photo["taken_at"] == "1982-07-03T10:30:00Z"
@@ -230,9 +230,12 @@ def test_explicit_replace_updates_only_selected_field(
             assert result[key] == pair["target"][key]
     if field == "album_id":
         assert result["album_linked"] is False
+    elif source_values == target_values:
+        assert result["metadata_synced"] is True
+        assert result["upload_status"] == "uploaded"
     else:
         assert result["metadata_synced"] is False
-    assert result["needs_upload"] is True
+    assert result["needs_upload"] is (source_values != target_values)
     assert copy(client, pair, field, replace=True).status_code == 409
 
 

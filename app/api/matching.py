@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, aliased
 from app.api.deps import get_session
 from app.api.jobs import _job_out
 from app.api.scans import _apply_patch
+from app.jobs.handlers import refresh_upload_state
 from app.jobs.queue import enqueue_job
 from app.matching import available_fields, has_field, index_signature
 from app.models import Job, PhotoMatch, Region, Scan
@@ -145,6 +146,7 @@ def copy_field(
         else {body.field: getattr(source, body.field)}
     )
     _apply_patch(dst_scan, target, RegionPatch(**values))
+    refresh_upload_state(session, dst_scan)
     session.commit()
     return _photo(target, dst_scan)
 

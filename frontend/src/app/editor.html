@@ -447,6 +447,21 @@
                 }
                 <div class="retouch-options">
                   <label class="check">
+                    <input type="checkbox" [checked]="region.retouch_paper_mesh"
+                      (change)="setRetouch('retouch_paper_mesh', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)" />
+                    Reduce repeating paper texture
+                  </label>
+                  <div class="help-row"><label class="check">
+                    <input type="checkbox" [checked]="region.retouch_paper_embossed"
+                      (change)="setRetouch('retouch_paper_embossed', $any($event.target).checked)"
+                      [disabled]="busy() || retouchingRegion(region)" />
+                    Reduce embossed paper texture (medium)
+                  </label>
+                  <app-help-tip label="Paper texture help">Choose the paper treatment matching your print.
+                    Start with deblur and gentle denoise off; extra smoothing can soften faces and lace.</app-help-tip>
+                  </div>
+                  <label class="check">
                     <input
                       type="checkbox"
                       [checked]="region.retouch_dust"

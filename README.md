@@ -117,6 +117,16 @@ when their photo records are deleted.
 
 Retouch controls are available per photo, with defaults under Settings → Processing:
 
+- **Reduce repeating paper texture:** suppresses narrow frequency peaks from regular mesh
+  paper without broad smoothing (the selected treatment for the first experimental portrait).
+- **Reduce embossed paper texture (medium):** estimates the paper spectrum from quiet,
+  non-clipped patches and uses overlapping local spectral subtraction at strength 1.5.
+  This reduces irregular paper relief but can soften fine detail. The background sample is
+  selected automatically for each crop; results can differ from a manually selected sample.
+  Choose the treatment matching your print and initially leave deblur and gentle denoise off.
+  Both paper filters run at native resolution before other cleanup, need no models, and are
+  available per photo, in bulk retouch, and as processing defaults.
+
 - **Remove dust and small spots:** repairs isolated high-contrast specks up to a few source pixels
   across in quiet areas. Larger damage belongs to scratch repair. Review fine details at full size.
 - **Gentle denoise:** native-resolution non-local means, lightly blended with the source to retain

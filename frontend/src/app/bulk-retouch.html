@@ -16,10 +16,11 @@
 
   <div class="bulk-layout">
     <fieldset class="bulk-options" [disabled]="starting()">
-      <legend>Retouch stages</legend>
-      <p class="muted small">
+      <legend>Retouch stages <app-help-tip label="Bulk retouch stages">
         These choices replace the saved stages only for photos queued by this run.
-      </p>
+        AI upscale and strong denoise use Real-ESRGAN.
+        AI stages need their models installed under <a routerLink="/settings">Settings</a>.
+      </app-help-tip></legend>
       @for (stage of stages; track stage.key) {
         <label class="check">
           <input
@@ -47,10 +48,6 @@
           Face restoration reconstructs details. Review the results before uploading.
         </p>
       }
-      <p class="muted small">
-        AI upscale and strong denoise use Real-ESRGAN.
-        AI stages need their models installed under <a routerLink="/settings">Settings</a>.
-      </p>
     </fieldset>
 
     <div class="bulk-scope">
@@ -68,7 +65,7 @@
             <option value="uploaded">Already uploaded</option>
           </select>
         </div>
-        <label class="check">
+        <div class="help-row"><label class="check">
           <input
             type="checkbox"
             [checked]="includeRetouched()"
@@ -76,9 +73,10 @@
           />
           Retouch already retouched photos
         </label>
-        <p class="muted small">
+        <app-help-tip label="Previously retouched photos">
           By default, photos with any previous result are skipped, including stale results.
-        </p>
+        </app-help-tip>
+        </div>
         @if (includeRetouched()) {
           <p class="banner warn small">
             Existing results will be replaced after each successful retouch. Processing starts from
@@ -131,11 +129,11 @@
           Retouch {{ summary()?.eligible ?? 0 }} photos
         }
       </button>
-      <p class="muted small">
+      <app-help-tip label="Background retouch processing">
         Photos run one at a time in the background. You can leave this page. Counts are checked
         again when you start. Successful results become the upload version; nothing is uploaded
         automatically.
-      </p>
+      </app-help-tip>
     </div>
   </div>
 </section>

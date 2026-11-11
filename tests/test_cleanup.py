@@ -83,6 +83,7 @@ def test_cleanup_settings_jobs_and_stale_output(client, app_bundle):
     saved = client.put('/api/settings', json={
         'retouch_dust': True, 'retouch_deblur': True,
         'retouch_gentle_denoise': True, 'retouch_output_scale': 2,
+        'retouch_paper_mesh': True, 'retouch_paper_embossed': True,
     })
     assert saved.status_code == 200
     scan_id = _import_bed(services, encode_png(make_bed()))
@@ -90,12 +91,13 @@ def test_cleanup_settings_jobs_and_stale_output(client, app_bundle):
     region = client.get(f'/api/scans/{scan_id}').json()['regions'][0]
     assert region['retouch_dust'] and region['retouch_deblur']
     assert region['retouch_gentle_denoise'] and region['retouch_output_scale'] == 2
+    assert region['retouch_paper_mesh'] and region['retouch_paper_embossed']
     url = f'/api/scans/{scan_id}/regions/{region["id"]}'
-    assert client.post(url + '/retouch', json={'dust': True}).status_code == 202
+    assert client.post(url + '/retouch', json={'paper_mesh': True}).status_code == 202
     app.state.worker.process_available()
     ready = client.get(f'/api/scans/{scan_id}').json()['regions'][0]
     assert ready['retouch_ready']
-    changed = client.patch(url, json={'retouch_deblur': True})
+    changed = client.patch(url, json={'retouch_paper_embossed': True})
     assert changed.json()['retouch_status'] == 'stale'
     assert client.post(url + '/retouch', json={'dust': True, 'output_scale': 3}).status_code == 422
 
@@ -108,7 +110,8 @@ def test_cleanup_migration_defaults_and_downgrade(tmp_path):
     command.upgrade(config, 'head')
     with sqlite3.connect(database) as connection:
         columns = {row[1]: row for row in connection.execute('PRAGMA table_info(regions)')}
-        for name in ('retouch_dust', 'retouch_deblur', 'retouch_gentle_denoise'):
+        for name in ('retouch_dust', 'retouch_deblur', 'retouch_gentle_denoise',
+                     'retouch_paper_mesh', 'retouch_paper_embossed'):
             assert columns[name][3] == 1
             assert columns[name][4] == '0'
         assert columns['retouch_output_scale'][4] == "'4'"

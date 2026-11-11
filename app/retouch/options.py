@@ -8,7 +8,7 @@ from app.models import Region
 # "upscale and denoise" step, so that bit follows the upscale bit.
 _TOKEN = re.compile(
     r"u([01])(?:d([01]))?f([01])c([01])s([01])(?:b([01])t([01]))?"
-    r"(?:p([01])r([01])g([01])x([24]))?$"
+    r"(?:p([01])r([01])g([01])x([24]))?(?:m([01])e([01]))?$"
 )
 _RETOUCH_MARKER = "|retouch|"
 
@@ -25,6 +25,8 @@ class RetouchOptions:
     dust: bool = False
     deblur: bool = False
     gentle_denoise: bool = False
+    paper_mesh: bool = False
+    paper_embossed: bool = False
     output_scale: int = 4
 
     def any_selected(self) -> bool:
@@ -40,6 +42,8 @@ class RetouchOptions:
                 self.dust,
                 self.deblur,
                 self.gentle_denoise,
+                self.paper_mesh,
+                self.paper_embossed,
             )
         )
 
@@ -56,6 +60,8 @@ def options_from_region(region: Region) -> RetouchOptions:
         dust=bool(region.retouch_dust),
         deblur=bool(region.retouch_deblur),
         gentle_denoise=bool(region.retouch_gentle_denoise),
+        paper_mesh=bool(region.retouch_paper_mesh),
+        paper_embossed=bool(region.retouch_paper_embossed),
         output_scale=(region.retouch_output_scale or 4) if region.retouch_upscale else 4,
     )
 
@@ -69,6 +75,10 @@ def option_token(options: RetouchOptions) -> str:
             f"p{int(options.dust)}r{int(options.deblur)}g{int(options.gentle_denoise)}"
             f"x{options.output_scale if options.upscale else 4}"
         )
+    paper = (
+        f"m{int(options.paper_mesh)}e{int(options.paper_embossed)}"
+        if options.paper_mesh or options.paper_embossed else ""
+    )
     return (
         f"u{int(options.upscale)}"
         f"d{int(options.denoise)}"
@@ -78,6 +88,7 @@ def option_token(options: RetouchOptions) -> str:
         f"b{int(options.color_balance)}"
         f"t{int(options.contrast)}"
         f"{extra}"
+        f"{paper}"
     )
 
 
@@ -99,6 +110,8 @@ def options_from_token(token: str) -> RetouchOptions | None:
         deblur=match.group(9) == "1",
         gentle_denoise=match.group(10) == "1",
         output_scale=int(match.group(11) or 4),
+        paper_mesh=match.group(12) == "1",
+        paper_embossed=match.group(13) == "1",
     )
 
 
@@ -117,6 +130,8 @@ def expected_retouch_signature(region: Region) -> str:
     revision = "|scratch-v4" if region.retouch_scratches else ""
     if region.retouch_contrast:
         revision += "|contrast-v3"
+    if region.retouch_paper_mesh or region.retouch_paper_embossed:
+        revision += "|paper-v1"
     return f"{geometry_signature(region)}{revision}|{option_token(options_from_region(region))}"
 
 
@@ -170,7 +185,8 @@ def retouch_matches(region: Region) -> bool:
         return True
     # Earlier masks either erased fabric or left crease edges unfilled. They
     # need regeneration even when the selected switches still match.
-    if region.retouch_scratches or region.retouch_contrast:
+    if (region.retouch_scratches or region.retouch_contrast
+            or region.retouch_paper_mesh or region.retouch_paper_embossed):
         return False
     # A derivative from before denoise was its own bit stays current when the
     # saved upscale bit still means both steps and the crop is unchanged.

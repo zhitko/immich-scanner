@@ -85,6 +85,8 @@ describe('BulkRetouchPage', () => {
         dust: false,
         deblur: false,
         gentle_denoise: false,
+        paper_mesh: false,
+        paper_embossed: false,
         output_scale: 2,
       },
       state: 'all',

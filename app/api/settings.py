@@ -88,6 +88,8 @@ def _archive(body: SettingsUpdate) -> ArchiveSettings:
         retouch_dust=body.retouch_dust,
         retouch_deblur=body.retouch_deblur,
         retouch_gentle_denoise=body.retouch_gentle_denoise,
+        retouch_paper_mesh=body.retouch_paper_mesh,
+        retouch_paper_embossed=body.retouch_paper_embossed,
         retouch_output_scale=body.retouch_output_scale,
     )
 
@@ -116,5 +118,7 @@ def _out(settings: ArchiveSettings) -> SettingsOut:
         retouch_dust=settings.retouch_dust,
         retouch_deblur=settings.retouch_deblur,
         retouch_gentle_denoise=settings.retouch_gentle_denoise,
+        retouch_paper_mesh=settings.retouch_paper_mesh,
+        retouch_paper_embossed=settings.retouch_paper_embossed,
         retouch_output_scale=settings.retouch_output_scale,
     )

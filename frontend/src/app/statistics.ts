@@ -48,6 +48,8 @@ export class StatisticsPage {
     { key: 'retouched_dust', label: 'Dust removal' },
     { key: 'retouched_deblur', label: 'Deblur' },
     { key: 'retouched_gentle_denoise', label: 'Gentle denoise' },
+    { key: 'retouched_paper_mesh', label: 'Repeating paper texture reduction' },
+    { key: 'retouched_paper_embossed', label: 'Embossed paper texture reduction' },
     { key: 'retouched_colorize', label: 'Colorize' },
     { key: 'retouched_upscale', label: 'Upscale' },
     { key: 'retouched_denoise', label: 'Denoise' },

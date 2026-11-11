@@ -62,6 +62,8 @@ def region_out(region: Region) -> RegionOut:
         retouch_dust=bool(region.retouch_dust),
         retouch_deblur=bool(region.retouch_deblur),
         retouch_gentle_denoise=bool(region.retouch_gentle_denoise),
+        retouch_paper_mesh=bool(region.retouch_paper_mesh),
+        retouch_paper_embossed=bool(region.retouch_paper_embossed),
         retouch_output_scale=region.retouch_output_scale or 4,
         upload_source=region.upload_source or "crop",
         retouch_status=status,

@@ -9,6 +9,7 @@ from app.clock import utcnow
 from app.imaging.crop import upright_crop
 from app.imaging.io import load_rgb, save_rgb
 from app.imaging.preview import drop_previews, retouch_preview_path, write_retouch_preview
+from app.jobs.handlers import refresh_upload_state
 from app.models import Job, Region, Scan
 from app.retouch.options import (
     expected_retouch_signature,
@@ -111,6 +112,9 @@ def handle_retouch(session: Session, job: Job, services: Services) -> None:
         elif expected_retouch_signature(current) == produced:
             current.retouch_status = "ready"
             current.upload_source = "retouch"
+            current.upload_status = "pending"
+            current.upload_error = None
+            refresh_upload_state(session, scan)
         else:
             current.retouch_status = "stale"
             if current.upload_source == "retouch":

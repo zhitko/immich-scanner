@@ -57,6 +57,8 @@ _RETOUCH_FIELDS = {
     "retouch_dust",
     "retouch_deblur",
     "retouch_gentle_denoise",
+    "retouch_paper_mesh",
+    "retouch_paper_embossed",
     "retouch_output_scale",
 }
 
@@ -235,6 +237,7 @@ def update_region(
     scan = _scan(session, scan_id)
     region = _region(session, scan, region_id)
     _apply_patch(scan, region, body)
+    refresh_upload_state(session, scan)
     # The browser requests the new preview as soon as this response arrives.
     # Dependency cleanup can run after sending it, so commit the crop here.
     session.commit()
@@ -295,6 +298,8 @@ def retouch_region(
     region.retouch_dust = body.dust
     region.retouch_deblur = body.deblur
     region.retouch_gentle_denoise = body.gentle_denoise
+    region.retouch_paper_mesh = body.paper_mesh
+    region.retouch_paper_embossed = body.paper_embossed
     region.retouch_output_scale = body.output_scale
     region.updated_at = utcnow()
     job = enqueue_job(
@@ -392,6 +397,7 @@ def refresh_immich_metadata(
 
 def _apply_patch(scan: Scan, region: Region, body: RegionPatch) -> None:
     fields = body.model_fields_set
+    metadata_before = {name: getattr(region, name) for name in _META_FIELDS | {"album_id"}}
     geometry = {"center_x", "center_y", "width", "height", "angle_deg"}
     if geometry <= fields:
         ensure_geometry(
@@ -427,8 +433,14 @@ def _apply_patch(scan: Scan, region: Region, body: RegionPatch) -> None:
         region.rating = body.rating
     if "visibility" in fields:
         region.visibility = body.visibility
-    if fields & _META_FIELDS:
+    metadata_changed = any(
+        getattr(region, name) != value for name, value in metadata_before.items()
+    )
+    if metadata_changed:
         region.metadata_synced = False
+        if region.upload_status != "uploading":
+            region.upload_status = "pending"
+            region.upload_error = None
     for name in (
         "retouch_upscale",
         "retouch_denoise",
@@ -440,6 +452,8 @@ def _apply_patch(scan: Scan, region: Region, body: RegionPatch) -> None:
         "retouch_dust",
         "retouch_deblur",
         "retouch_gentle_denoise",
+        "retouch_paper_mesh",
+        "retouch_paper_embossed",
         "retouch_output_scale",
     ):
         if name in fields and getattr(body, name) is not None:

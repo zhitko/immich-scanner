@@ -27,6 +27,8 @@ export interface Statistics {
   retouched_dust: number;
   retouched_deblur: number;
   retouched_gentle_denoise: number;
+  retouched_paper_mesh: number;
+  retouched_paper_embossed: number;
   first_scan_at: string | null;
   latest_scan_at: string | null;
   earliest_photo_at: string | null;
@@ -70,6 +72,8 @@ export interface Region {
   retouch_dust: boolean;
   retouch_deblur: boolean;
   retouch_gentle_denoise: boolean;
+  retouch_paper_mesh: boolean;
+  retouch_paper_embossed: boolean;
   retouch_output_scale: 2 | 4;
   upload_source: 'crop' | 'retouch';
   retouch_status: string;
@@ -191,6 +195,8 @@ export interface Settings {
   retouch_dust: boolean;
   retouch_deblur: boolean;
   retouch_gentle_denoise: boolean;
+  retouch_paper_mesh: boolean;
+  retouch_paper_embossed: boolean;
   retouch_output_scale: 2 | 4;
 }
 
@@ -266,6 +272,8 @@ export interface RetouchChoice {
   dust: boolean;
   deblur: boolean;
   gentle_denoise: boolean;
+  paper_mesh: boolean;
+  paper_embossed: boolean;
   output_scale: 2 | 4;
 }
 
@@ -299,6 +307,8 @@ export interface RetouchPatch {
   retouch_dust?: boolean;
   retouch_deblur?: boolean;
   retouch_gentle_denoise?: boolean;
+  retouch_paper_mesh?: boolean;
+  retouch_paper_embossed?: boolean;
   retouch_output_scale?: 2 | 4;
   upload_source?: 'crop' | 'retouch';
 }

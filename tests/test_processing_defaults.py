@@ -15,6 +15,8 @@ PROCESSING_FLAGS = (
     "retouch_dust",
     "retouch_deblur",
     "retouch_gentle_denoise",
+    "retouch_paper_mesh",
+    "retouch_paper_embossed",
 )
 
 

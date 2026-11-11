@@ -1,10 +1,12 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 
 import { ArchiveApi, httpError } from './api';
+import { HelpTip } from './help-tip';
 import { Album, ModelProgress, RetouchModel, ScannerDevice, Settings } from './models';
 
 @Component({
   selector: 'app-settings-page',
+  imports: [HelpTip],
   templateUrl: './settings-page.html',
 })
 export class SettingsPage {
@@ -112,7 +114,9 @@ export class SettingsPage {
       | 'retouch_contrast'
       | 'retouch_dust'
       | 'retouch_deblur'
-      | 'retouch_gentle_denoise',
+      | 'retouch_gentle_denoise'
+      | 'retouch_paper_mesh'
+      | 'retouch_paper_embossed',
     checked: boolean,
   ): void {
     this.update(key, checked);

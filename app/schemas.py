@@ -36,6 +36,8 @@ class StatisticsOut(BaseModel):
     retouched_dust: int
     retouched_deblur: int
     retouched_gentle_denoise: int
+    retouched_paper_mesh: int
+    retouched_paper_embossed: int
     first_scan_at: datetime | None
     latest_scan_at: datetime | None
     earliest_photo_at: datetime | None
@@ -79,6 +81,8 @@ class RegionOut(BaseModel):
     retouch_dust: bool
     retouch_deblur: bool
     retouch_gentle_denoise: bool
+    retouch_paper_mesh: bool
+    retouch_paper_embossed: bool
     retouch_output_scale: Literal[2, 4]
     upload_source: Literal["crop", "retouch"]
     retouch_status: str
@@ -184,6 +188,8 @@ class RegionPatch(BaseModel):
     retouch_dust: bool | None = None
     retouch_deblur: bool | None = None
     retouch_gentle_denoise: bool | None = None
+    retouch_paper_mesh: bool | None = None
+    retouch_paper_embossed: bool | None = None
     retouch_output_scale: Literal[2, 4] | None = None
     upload_source: Literal["crop", "retouch"] | None = None
 
@@ -225,6 +231,8 @@ class RetouchRequest(BaseModel):
     dust: bool = False
     deblur: bool = False
     gentle_denoise: bool = False
+    paper_mesh: bool = False
+    paper_embossed: bool = False
     output_scale: Literal[2, 4] = 4
 
     @model_validator(mode="after")
@@ -244,6 +252,8 @@ class RetouchRequest(BaseModel):
                 self.dust,
                 self.deblur,
                 self.gentle_denoise,
+                self.paper_mesh,
+                self.paper_embossed,
             )
         ):
             raise ValueError("Choose at least one retouch stage.")
@@ -359,6 +369,8 @@ class SettingsOut(BaseModel):
     retouch_dust: bool
     retouch_deblur: bool
     retouch_gentle_denoise: bool
+    retouch_paper_mesh: bool
+    retouch_paper_embossed: bool
     retouch_output_scale: Literal[2, 4]
 
 
@@ -386,6 +398,8 @@ class SettingsUpdate(BaseModel):
     retouch_dust: bool = False
     retouch_deblur: bool = False
     retouch_gentle_denoise: bool = False
+    retouch_paper_mesh: bool = False
+    retouch_paper_embossed: bool = False
     retouch_output_scale: Literal[2, 4] = 4
 
     @model_validator(mode="after")

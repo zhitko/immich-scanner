@@ -15,6 +15,7 @@ import { EMPTY, Observable, finalize, forkJoin, map, of, switchMap, tap } from '
 
 import { ArchiveApi, httpError } from './api';
 import { DateMask } from './date-mask';
+import { HelpTip } from './help-tip';
 import {
   Corner,
   Edge,
@@ -88,7 +89,7 @@ const DEFAULT_STROKE = '#f5f1e8';
 
 @Component({
   selector: 'app-editor',
-  imports: [RouterLink, DateMask],
+  imports: [RouterLink, DateMask, HelpTip],
   templateUrl: './editor.html',
   host: {
     '(document:keydown)': 'onKey($event)',
@@ -450,7 +451,9 @@ export class EditorPage {
       region.retouch_contrast ||
       region.retouch_dust ||
       region.retouch_deblur ||
-      region.retouch_gentle_denoise
+      region.retouch_gentle_denoise ||
+      region.retouch_paper_mesh ||
+      region.retouch_paper_embossed
     );
   }
 
@@ -504,7 +507,9 @@ export class EditorPage {
       | 'retouch_contrast'
       | 'retouch_dust'
       | 'retouch_deblur'
-      | 'retouch_gentle_denoise',
+      | 'retouch_gentle_denoise'
+      | 'retouch_paper_mesh'
+      | 'retouch_paper_embossed',
     checked: boolean,
   ): void {
     const scan = this.scan();
@@ -555,6 +560,8 @@ export class EditorPage {
         dust: region.retouch_dust,
         deblur: region.retouch_deblur,
         gentle_denoise: region.retouch_gentle_denoise,
+        paper_mesh: region.retouch_paper_mesh,
+        paper_embossed: region.retouch_paper_embossed,
         output_scale: region.retouch_output_scale,
       }),
       (result) => {

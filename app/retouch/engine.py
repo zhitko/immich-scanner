@@ -28,6 +28,7 @@ from app.retouch.imageops import (
 )
 from app.retouch.levels import correct_color_cast, restore_contrast
 from app.retouch.options import RetouchOptions
+from app.retouch.paper import reduce_paper_embossed, reduce_paper_mesh
 from app.retouch.session import open_session
 
 _LAMA_SIZE = 512
@@ -83,6 +84,15 @@ class OnnxRetoucher:
         # Real-ESRGAN pass after that: both networks emit 4×, so a second pass
         # would enlarge twice. Faces run last and see the image that will be saved.
         result = as_float_rgb(image)
+        for selected, stage, process in (
+            (options.paper_mesh, "Reducing repeating paper texture", reduce_paper_mesh),
+            (options.paper_embossed, "Reducing embossed paper texture", reduce_paper_embossed),
+        ):
+            if selected:
+                _announce(on_stage, stage)
+                result = process(result)
+                if budget is not None:
+                    budget.add(1)
         if options.dust:
             _announce(on_stage, "Removing dust and small spots")
             result = remove_dust(result)
@@ -168,6 +178,7 @@ class OnnxRetoucher:
             return None
         total = 0
         total += int(options.dust) + int(options.deblur) + int(options.gentle_denoise)
+        total += int(options.paper_mesh) + int(options.paper_embossed)
         total += int(options.upscale and options.output_scale == 2)
         face_estimate = 0
         if options.scratches:

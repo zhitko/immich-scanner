@@ -915,6 +915,14 @@ input[type='time'] {
   font-size: 0.82rem;
 }
 
+.help-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.help-row > label { margin: 0; }
+.help-row > app-help-tip { flex: none; }
+
 fieldset.group {
   display: grid;
   gap: 16px;
