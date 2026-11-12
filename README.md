@@ -174,7 +174,13 @@ The stages that are switched on run in this order: scratch repair, color-cast co
 contrast restoration, colorization, upscale/denoise, then face restoration.
 
 **Correct color cast** balances the RGB black and white levels of faded color prints,
-such as photos that have turned red or yellow. **Restore contrast** expands washed-out
+such as photos that have turned red or yellow. Red-faded, low-contrast prints are
+automatically checked for consistent red dominance across tones and quiet patches.
+Qualifying prints use bounded channel curves estimated from those patches, excluding
+borders, clipping, and high texture. Correction strength follows reference confidence
+and runs before contrast expansion; no extra controls are required. Other prints use
+the standard endpoint/midtone balance. Both methods assume broadly neutral scene
+content and cannot reconstruct lost original colors. **Restore contrast** expands washed-out
 black and white levels and gently balances broad brightness gradients by lifting shaded
 areas and holding back bright ones, including in black-and-white photos. It also reduces
 broad haze by gently lowering raised local black levels where nearby detail supports it.

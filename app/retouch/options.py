@@ -130,6 +130,8 @@ def expected_retouch_signature(region: Region) -> str:
     revision = "|scratch-v4" if region.retouch_scratches else ""
     if region.retouch_contrast:
         revision += "|contrast-v3"
+    if region.retouch_color_balance:
+        revision += "|color-v3"
     if region.retouch_paper_mesh or region.retouch_paper_embossed:
         revision += "|paper-v1"
     return f"{geometry_signature(region)}{revision}|{option_token(options_from_region(region))}"
@@ -183,13 +185,24 @@ def retouch_matches(region: Region) -> bool:
         return False
     if region.retouch_signature == expected_retouch_signature(region):
         return True
+    prefix, _separator, token = region.retouch_signature.rpartition("|")
+    stored = options_from_token(token)
+    geometry = geometry_signature(region)
+    # A processing revision must not hide the derivative already sent to Immich.
+    # Keep it usable only while that exact upload, crop, and selected steps match.
+    if (
+        region.immich_asset_id
+        and region.uploaded_crop_signature
+        == f"{geometry}{_RETOUCH_MARKER}{region.retouch_signature}"
+        and prefix.split("|")[:6] == geometry.split("|")
+        and stored == options_from_region(region)
+    ):
+        return True
     # Earlier masks either erased fabric or left crease edges unfilled. They
     # need regeneration even when the selected switches still match.
-    if (region.retouch_scratches or region.retouch_contrast
+    if (region.retouch_scratches or region.retouch_contrast or region.retouch_color_balance
             or region.retouch_paper_mesh or region.retouch_paper_embossed):
         return False
     # A derivative from before denoise was its own bit stays current when the
     # saved upscale bit still means both steps and the crop is unchanged.
-    prefix, _separator, token = region.retouch_signature.rpartition("|")
-    stored = options_from_token(token)
     return stored == options_from_region(region) and prefix == geometry_signature(region)

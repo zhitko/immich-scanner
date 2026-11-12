@@ -1103,6 +1103,54 @@ def test_levels_only_retouch_and_option_changes_invalidate_result(client, app_bu
     assert restored.json()["retouch_ready"] is True
 
 
+def test_uploaded_retouch_survives_processing_revision(client, app_bundle) -> None:
+    app, services = app_bundle
+    services.retoucher = MarkRetoucher()
+    scan_id = _import_bed(services, encode_png(make_bed()))
+    assert app.state.worker.process_available() == 1
+    region_id = client.get(f"/api/scans/{scan_id}").json()["regions"][0]["id"]
+    url = f"/api/scans/{scan_id}/regions/{region_id}"
+    assert client.post(url + "/retouch", json={"color_balance": True}).status_code == 202
+    assert app.state.worker.process_available() == 1
+    preview = client.get(url + "/retouch-preview")
+    assert preview.status_code == 200
+
+    with services.session_factory() as session:
+        region = session.get(Region, region_id)
+        region.retouch_signature = region.retouch_signature.replace("|color-v3", "")
+        geometry = region.retouch_signature.rpartition("|")[0]
+        region.uploaded_crop_signature = f"{geometry}|retouch|{region.retouch_signature}"
+        region.immich_asset_id = "uploaded-asset"
+        region.upload_status = "uploaded"
+        region.metadata_synced = True
+        session.commit()
+
+    photo = client.get(f"/api/photos/{region_id}").json()["regions"][0]
+    assert photo["retouch_status"] == "ready"
+    assert photo["retouch_ready"] is True
+    assert photo["retouch_version"]
+    assert photo["upload_source"] == "retouch"
+    assert photo["needs_upload"] is False
+    assert client.get(url + "/retouch-preview").content == preview.content
+    listed = client.get("/api/photos?state=uploaded&filters=retouched").json()
+    assert [item["id"] for item in listed] == [region_id]
+
+    # Saving the selected version must not silently switch the photo to original.
+    selected = client.patch(url, json={"upload_source": "retouch"})
+    assert selected.status_code == 200
+    assert selected.json()["retouch_ready"] is True
+    assert selected.json()["upload_source"] == "retouch"
+
+    changed = client.patch(url, json={"retouch_color_balance": False})
+    assert changed.json()["retouch_status"] == "stale"
+    assert changed.json()["retouch_ready"] is False
+    assert client.get(url + "/retouch-preview").status_code == 404
+    restored = client.patch(url, json={"retouch_color_balance": True})
+    assert restored.json()["retouch_ready"] is True
+    rotated = client.patch(url, json={"quarter_turns": 1})
+    assert rotated.json()["retouch_ready"] is False
+
+
 def test_retouch_selects_the_result_and_keeps_the_crop_available(client, app_bundle) -> None:
     app, services = app_bundle
     services.retoucher = MarkRetoucher()
@@ -1424,6 +1472,33 @@ def test_an_old_combined_signature_stays_current() -> None:
     region.retouch_denoise = True
     region.retouch_signature = f"{geometry}|u1d1f0c0s0"
     assert retouch_is_current(region)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {},
+        {"immich_asset_id": None},
+        {"uploaded_crop_signature": "different-upload"},
+        {"retouch_color_balance": False},
+        {"quarter_turns": 1},
+        {"retouch_path": None},
+        {"retouch_status": "running"},
+    ],
+)
+def test_old_uploaded_retouch_requires_matching_content(changes) -> None:
+    geometry = crop_signature(10, 20, 30, 40, 1.5, 0)
+    signature = f"{geometry}|scratch-v3|contrast-v2|u0d0f0c0s1b1t1"
+    region = Region(
+        center_x=10, center_y=20, width=30, height=40, angle_deg=1.5, quarter_turns=0,
+        retouch_scratches=True, retouch_color_balance=True, retouch_contrast=True,
+        retouch_status="ready", retouch_path="retouched.png", retouch_signature=signature,
+        immich_asset_id="uploaded-asset",
+        uploaded_crop_signature=f"{geometry}|retouch|{signature}",
+    )
+    for key, value in changes.items():
+        setattr(region, key, value)
+    assert retouch_is_current(region) is (not changes)
 
 
 def test_saved_settings_without_denoise_still_mean_both(client, app_bundle) -> None:

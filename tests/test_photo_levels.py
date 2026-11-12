@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from app.retouch.engine import OnnxRetoucher
-from app.retouch.levels import correct_color_cast, restore_contrast
+from app.retouch.levels import _restore_red_fade, correct_color_cast, restore_contrast
 from app.retouch.options import RetouchOptions, option_token, options_from_token
 
 
@@ -16,6 +16,80 @@ def test_color_balance_removes_cast_from_faded_neutrals() -> None:
     assert result.shape == image.shape
     assert result.dtype == np.uint8
     np.testing.assert_array_equal(image, before)
+
+
+def test_color_balance_corrects_nonlinear_fading_before_contrast() -> None:
+    ramp = np.tile(np.linspace(0, 1, 512, dtype=np.float32), (64, 1))
+    bow = 4 * ramp * (1 - ramp)
+    image = np.stack((150 + 50 * ramp - 3 * bow, 103 + 50 * ramp,
+                      102 + 50 * ramp + bow), axis=2)
+    result = correct_color_cast(image)
+    center = result[:, 180:330]
+    assert np.ptp(center.mean(axis=(0, 1))) < 2
+    assert np.ptp(restore_contrast(result)[:, 180:330].mean(axis=(0, 1))) < 8
+    assert result.dtype == np.float32
+    assert np.all(np.diff(result, axis=1) >= 0)
+
+
+def test_color_balance_preserves_full_range_scene_colors() -> None:
+    ramp = np.tile(np.linspace(0, 255, 512, dtype=np.float32), (64, 1))
+    image = np.stack((ramp, ramp ** 2 / 255, ramp), axis=2)
+    result = correct_color_cast(image)
+    # Full-range color is not fading; a green-deficient scene remains so.
+    assert result[:, 256, 0].mean() - result[:, 256, 1].mean() > 60
+
+
+def _red_faded_ramp() -> np.ndarray:
+    ramp = np.tile(np.linspace(0, 1, 256, dtype=np.float32), (192, 1))
+    return np.stack((150 + 55 * ramp ** 1.2, 103 + 52 * ramp,
+                     101 + 49 * ramp ** 0.9), axis=2)
+
+
+def test_automatic_red_fade_restores_neutrals_without_cyan_overshoot() -> None:
+    image = _red_faded_ramp()
+    before = image.copy()
+    result = _restore_red_fade(image, image)
+    assert result is not None
+    central = result[:, 40:215]
+    assert np.ptp(central.mean(axis=(0, 1))) < 4
+    assert np.min(central[:, :, 0] - central[:, :, 1]) > -1
+    assert np.all(np.diff(result, axis=1) >= 0)
+    assert result.dtype == np.float32
+    np.testing.assert_array_equal(image, before)
+    np.testing.assert_allclose(correct_color_cast(image), result)
+
+
+def test_red_fade_reference_ignores_border_and_isolated_damage() -> None:
+    image = _red_faded_ramp()
+    clean = _restore_red_fade(image, image)
+    damaged = image.copy()
+    damaged[:8] = (255, 0, 180)
+    damaged[-8:] = 255
+    damaged[:, :10] = 0
+    damaged[:, -10:] = (255, 40, 120)
+    damaged[::23, ::19] = 255
+    result = _restore_red_fade(damaged, damaged)
+    assert result is not None
+    mask = np.ones(image.shape[:2], dtype=bool)
+    mask[:10] = mask[-10:] = False
+    mask[:, :12] = mask[:, -12:] = False
+    mask[::23, ::19] = False
+    assert np.abs(result[mask] - clean[mask]).mean() < 1
+
+
+@pytest.mark.parametrize("kind", ["neutral", "full_range_red", "flat", "mixed"])
+def test_red_fade_does_not_activate_without_consistent_fading(kind) -> None:
+    image = _red_faded_ramp()
+    if kind == "neutral":
+        image[:] = image.mean(axis=2, keepdims=True)
+    elif kind == "full_range_red":
+        ramp = np.linspace(0, 1, image.shape[1])
+        image[:] = np.stack((30 + 220 * ramp, 180 * ramp, 160 * ramp), axis=1)
+    elif kind == "flat":
+        image[:] = (175, 120, 115)
+    else:
+        image[:, :128] = image[:, :128, ::-1]
+    assert _restore_red_fade(image, image) is None
 
 
 def test_contrast_deepens_faded_blacks_and_preserves_neutrality() -> None:
