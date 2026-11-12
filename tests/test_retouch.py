@@ -1317,7 +1317,7 @@ def test_scratch_job_saves_the_detector_revision(client, app_bundle) -> None:
     saved = client.get(f"/api/scans/{scan_id}").json()["regions"][0]
     assert saved["retouch_status"] == "ready"
     assert saved["retouch_ready"] is True
-    assert "|scratch-v4|" in saved["retouch_signature"]
+    assert "|scratch-v5|" in saved["retouch_signature"]
 
 
 def test_missing_weights_fail_the_photo_and_leave_the_crop(client, app_bundle) -> None:

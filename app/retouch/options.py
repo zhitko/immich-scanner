@@ -127,7 +127,7 @@ def geometry_signature(region: Region) -> str:
 
 
 def expected_retouch_signature(region: Region) -> str:
-    revision = "|scratch-v4" if region.retouch_scratches else ""
+    revision = "|scratch-v5" if region.retouch_scratches else ""
     if region.retouch_contrast:
         revision += "|contrast-v3"
     if region.retouch_color_balance:

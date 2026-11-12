@@ -95,10 +95,10 @@ def test_old_scratch_derivatives_are_stale_but_new_results_are_current():
         retouch_path="retouch/example.png",
     )
     current = expected_retouch_signature(region)
-    region.retouch_signature = current.replace("|scratch-v4", "")
+    region.retouch_signature = current.replace("|scratch-v5", "")
     assert not retouch_matches(region)
-    for revision in ("scratch-v2", "scratch-v3"):
-        region.retouch_signature = current.replace("scratch-v4", revision)
+    for revision in ("scratch-v2", "scratch-v3", "scratch-v4"):
+        region.retouch_signature = current.replace("scratch-v5", revision)
         assert not retouch_matches(region)
     region.retouch_signature = current
     assert retouch_matches(region)
@@ -170,13 +170,51 @@ def test_second_scale_rejects_necklace_but_keeps_confirmed_crease_edges():
     coarse[495:510, 300:900] = 0.3
     coarse[500:503, 300:900] = 0.95  # Real crease, with uncertain edges.
     detail = np.zeros_like(coarse)
-    detail[500:503, 300:800] = 0.95  # Some scale-dependent gaps are expected.
+    detail[495:510, 300:900] = 0.3  # Fine-scale edges retain parallel cracks.
+    detail[500:503, 300:900] = 0.95
+    detail[495:510, 600:602] = 0  # Small scale-dependent gaps are expected.
     detail[100:900, 100:110] = 0.1
     detail[100:900, 950:960] = 0.95  # Fine-scale-only texture cannot seed a repair.
     mask = repair_mask(coarse, confirmation=detail)
     assert not mask[:, :200].any()
     assert mask[495:510, 300:900].all()
     assert not mask[:, 940:].any()
+
+
+@pytest.mark.parametrize("size", [512, 1024, 2048])
+def test_confirmed_crease_cannot_extend_into_unsupported_face_detail(size):
+    coarse = np.zeros((size, size), dtype=np.float32)
+    detail = np.zeros_like(coarse)
+    pixel = size // 256
+    x, y = size // 2, size // 2
+    top, bottom = size // 8, size * 7 // 8
+    coarse[top:bottom, x : x + 2 * pixel] = 0.95
+    # A long confirmed crease has a locally false confident branch over a face.
+    coarse[y : y + 10 * pixel, x : x + 12 * pixel] = 0.95
+    coarse[top:bottom, x - 3 * pixel : x] = 0.3
+    detail[top:bottom, x : x + 2 * pixel] = 0.95
+    detail[top:bottom, x - pixel : x] = 0.3
+    # Nearby fine-only texture cannot start its own repair.
+    detail[top:bottom, x + 20 * pixel : x + 22 * pixel] = 0.95
+
+    mask = repair_mask(coarse, confirmation=detail)
+
+    assert mask[top:bottom, x - pixel : x + 2 * pixel].all()
+    assert not mask[:, x + 3 * pixel :].any()
+    assert not mask[:, : x - 2 * pixel].any()
+
+
+def test_confirmation_does_not_bridge_a_long_unsupported_stretch():
+    coarse = np.zeros((1024, 1024), dtype=np.float32)
+    coarse[500:503, 100:900] = 0.95
+    detail = coarse.copy()
+    detail[:, 450:550] = 0
+
+    mask = repair_mask(coarse, confirmation=detail)
+
+    assert mask[500:503, 100:450].all()
+    assert mask[500:503, 550:900].all()
+    assert not mask[:, 452:548].any()
 
 
 def test_detector_requires_confirmation_before_repairing_a_bright_strand():

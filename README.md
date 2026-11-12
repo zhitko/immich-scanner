@@ -207,8 +207,12 @@ New photos start with the stages chosen under Settings → Processing. Opening a
 Scratch candidates also require majority high-confidence support from a second
 whole-photo pass at short side 512. This rejects necklace strands that look like
 scratches at 256 but resolve into beads at 512. The second pass cannot introduce
-new repair regions, and accepted creases retain their bounded edge expansion.
-This reduces false positives but can miss damage on which the scales disagree.
+new repair regions. Accepted cores and their bounded edge expansion must also
+have local support at probability 0.2 from the second pass, followed by the same
+half-pixel localization margin. This prevents a confirmed crease from authorizing
+a broad repair across nearby facial detail. Small gaps can bridge within that
+margin; larger unsupported stretches are left untouched. This reduces false
+positives but can miss damage on which the scales disagree.
 
 To compare the old geometric mask with the learned detector on local images, run
 `python -m app.retouch.benchmark --output /tmp/opencode/scratch-review --repair photo.png`.
