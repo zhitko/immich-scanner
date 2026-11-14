@@ -8,7 +8,7 @@ from app.models import Region
 # "upscale and denoise" step, so that bit follows the upscale bit.
 _TOKEN = re.compile(
     r"u([01])(?:d([01]))?f([01])c([01])s([01])(?:b([01])t([01]))?"
-    r"(?:p([01])r([01])g([01])x([24]))?(?:m([01])e([01]))?$"
+    r"(?:p([01])r([01])g([01])x([24]))?(?:m([01])e([01]))?(?:l([01]))?$"
 )
 _RETOUCH_MARKER = "|retouch|"
 
@@ -27,6 +27,7 @@ class RetouchOptions:
     gentle_denoise: bool = False
     paper_mesh: bool = False
     paper_embossed: bool = False
+    light_corners: bool = False
     output_scale: int = 4
 
     def any_selected(self) -> bool:
@@ -44,6 +45,7 @@ class RetouchOptions:
                 self.gentle_denoise,
                 self.paper_mesh,
                 self.paper_embossed,
+                self.light_corners,
             )
         )
 
@@ -62,6 +64,7 @@ def options_from_region(region: Region) -> RetouchOptions:
         gentle_denoise=bool(region.retouch_gentle_denoise),
         paper_mesh=bool(region.retouch_paper_mesh),
         paper_embossed=bool(region.retouch_paper_embossed),
+        light_corners=bool(region.retouch_light_corners),
         output_scale=(region.retouch_output_scale or 4) if region.retouch_upscale else 4,
     )
 
@@ -89,6 +92,7 @@ def option_token(options: RetouchOptions) -> str:
         f"t{int(options.contrast)}"
         f"{extra}"
         f"{paper}"
+        f"{'l1' if options.light_corners else ''}"
     )
 
 
@@ -112,6 +116,7 @@ def options_from_token(token: str) -> RetouchOptions | None:
         output_scale=int(match.group(11) or 4),
         paper_mesh=match.group(12) == "1",
         paper_embossed=match.group(13) == "1",
+        light_corners=match.group(14) == "1",
     )
 
 
@@ -128,6 +133,8 @@ def geometry_signature(region: Region) -> str:
 
 def expected_retouch_signature(region: Region) -> str:
     revision = "|scratch-v5" if region.retouch_scratches else ""
+    if region.retouch_light_corners:
+        revision += "|corners-v3"
     if region.retouch_contrast:
         revision += "|contrast-v3"
     if region.retouch_color_balance:
@@ -201,7 +208,8 @@ def retouch_matches(region: Region) -> bool:
     # Earlier masks either erased fabric or left crease edges unfilled. They
     # need regeneration even when the selected switches still match.
     if (region.retouch_scratches or region.retouch_contrast or region.retouch_color_balance
-            or region.retouch_paper_mesh or region.retouch_paper_embossed):
+            or region.retouch_paper_mesh or region.retouch_paper_embossed
+            or region.retouch_light_corners):
         return False
     # A derivative from before denoise was its own bit stays current when the
     # saved upscale bit still means both steps and the crop is unchanged.

@@ -236,6 +236,16 @@
           />
           Fill scratches
         </label>
+        <div class="help-row"><label class="check">
+          <input type="checkbox" [checked]="settings.retouch_light_corners"
+            (change)="setStep('retouch_light_corners', $any($event.target).checked)" />
+          Repair light corners
+        </label>
+        <app-help-tip>
+          Fills light corner damage, locally widening bright strips, and thin scanner frames using LaMa.
+          Gently normalizes supported edge fading before color correction.
+          Review the preview for bright scenery and edge detail.
+        </app-help-tip></div>
         <label class="check">
           <input
             type="checkbox"

@@ -111,7 +111,7 @@ def test_cleanup_migration_defaults_and_downgrade(tmp_path):
     with sqlite3.connect(database) as connection:
         columns = {row[1]: row for row in connection.execute('PRAGMA table_info(regions)')}
         for name in ('retouch_dust', 'retouch_deblur', 'retouch_gentle_denoise',
-                     'retouch_paper_mesh', 'retouch_paper_embossed'):
+                     'retouch_paper_mesh', 'retouch_paper_embossed', 'retouch_light_corners'):
             assert columns[name][3] == 1
             assert columns[name][4] == '0'
         assert columns['retouch_output_scale'][4] == "'4'"
@@ -119,4 +119,5 @@ def test_cleanup_migration_defaults_and_downgrade(tmp_path):
     with sqlite3.connect(database) as connection:
         columns = {row[1] for row in connection.execute('PRAGMA table_info(regions)')}
         assert 'retouch_dust' not in columns
+        assert 'retouch_light_corners' not in columns
         assert 'retouch_contrast' in columns

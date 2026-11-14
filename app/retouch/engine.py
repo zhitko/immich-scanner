@@ -8,6 +8,12 @@ import numpy as np
 from app.imaging.io import as_byte_rgb, as_float_rgb
 from app.retouch.catalog import CATALOG, ModelSpec, restoration_for, specs_for
 from app.retouch.cleanup import deblur, gentle_denoise, remove_dust
+from app.retouch.corners import (
+    blend_corner_fill,
+    corner_context,
+    light_corner_mask,
+    normalize_edge_fade,
+)
 from app.retouch.detection import learned_scratch_mask
 from app.retouch.imageops import (
     apply_ab,
@@ -84,6 +90,28 @@ class OnnxRetoucher:
         # Real-ESRGAN pass after that: both networks emit 4×, so a second pass
         # would enlarge twice. Faces run last and see the image that will be saved.
         result = as_float_rgb(image)
+        if options.light_corners:
+            _announce(on_stage, "Detecting light corner damage")
+            mask = light_corner_mask(result)
+            if mask.any():
+                _announce(on_stage, "Repairing light corners")
+                context, holes, pad = corner_context(result, mask)
+                tile_h, tile_w = self._lama_tile()
+                if budget is not None:
+                    extra = masked_tile_count(_inpaint_mask(holes), tile_h, tile_w, _LAMA_OVERLAP)
+                    budget.resize(budget.total + extra)
+                    budget.add(1)
+                filled = self._inpaint(
+                    context, holes, on_tile=None if budget is None else lambda: budget.add(1)
+                )[pad:-pad, pad:-pad].copy()
+                result = blend_corner_fill(result, filled, mask)
+                del context, holes
+            elif budget is not None:
+                budget.add(1)
+            _announce(on_stage, "Normalizing faded edges")
+            result = normalize_edge_fade(result)
+            if budget is not None:
+                budget.add(1)
         for selected, stage, process in (
             (options.paper_mesh, "Reducing repeating paper texture", reduce_paper_mesh),
             (options.paper_embossed, "Reducing embossed paper texture", reduce_paper_embossed),
@@ -179,6 +207,7 @@ class OnnxRetoucher:
         total = 0
         total += int(options.dust) + int(options.deblur) + int(options.gentle_denoise)
         total += int(options.paper_mesh) + int(options.paper_embossed)
+        total += 2 * int(options.light_corners)
         total += int(options.upscale and options.output_scale == 2)
         face_estimate = 0
         if options.scratches:
@@ -207,6 +236,7 @@ class OnnxRetoucher:
                 faces=options.faces,
                 colorize=options.colorize,
                 scratches=options.scratches,
+                light_corners=options.light_corners,
             )
             for name in spec.filenames()
             if not (self.models_dir / name).is_file()

@@ -51,6 +51,7 @@ def run_bulk_retouch(
             faces=choice.faces,
             colorize=choice.colorize,
             scratches=choice.scratches,
+            light_corners=choice.light_corners,
         )
         for filename in spec.filenames()
         if not (directory / filename).is_file()

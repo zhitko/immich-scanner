@@ -116,6 +116,7 @@ export class SettingsPage {
       | 'retouch_deblur'
       | 'retouch_gentle_denoise'
       | 'retouch_paper_mesh'
+      | 'retouch_light_corners'
       | 'retouch_paper_embossed',
     checked: boolean,
   ): void {

@@ -69,6 +69,7 @@ class Region(Base):
     retouch_gentle_denoise: Mapped[bool] = mapped_column(Boolean, default=False)
     retouch_paper_mesh: Mapped[bool] = mapped_column(Boolean, default=False)
     retouch_paper_embossed: Mapped[bool] = mapped_column(Boolean, default=False)
+    retouch_light_corners: Mapped[bool] = mapped_column(Boolean, default=False)
     retouch_output_scale: Mapped[int] = mapped_column(Integer, default=4)
     upload_source: Mapped[str] = mapped_column(String(16), default="crop")
     retouch_status: Mapped[str] = mapped_column(String(16), default="none")

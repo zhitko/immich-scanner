@@ -453,6 +453,7 @@ export class EditorPage {
       region.retouch_deblur ||
       region.retouch_gentle_denoise ||
       region.retouch_paper_mesh ||
+      region.retouch_light_corners ||
       region.retouch_paper_embossed
     );
   }
@@ -473,6 +474,9 @@ export class EditorPage {
     }
     if (region.retouch_scratches) {
       needed.add('scratch-detection');
+      needed.add('inpaint');
+    }
+    if (region.retouch_light_corners) {
       needed.add('inpaint');
     }
     const missing = this.retouchModels().filter((model) => needed.has(model.id) && !model.present);
@@ -509,6 +513,7 @@ export class EditorPage {
       | 'retouch_deblur'
       | 'retouch_gentle_denoise'
       | 'retouch_paper_mesh'
+      | 'retouch_light_corners'
       | 'retouch_paper_embossed',
     checked: boolean,
   ): void {
@@ -562,6 +567,7 @@ export class EditorPage {
         gentle_denoise: region.retouch_gentle_denoise,
         paper_mesh: region.retouch_paper_mesh,
         paper_embossed: region.retouch_paper_embossed,
+        light_corners: region.retouch_light_corners,
         output_scale: region.retouch_output_scale,
       }),
       (result) => {

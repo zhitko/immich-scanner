@@ -37,6 +37,7 @@ class ArchiveSettings:
     retouch_gentle_denoise: bool = False
     retouch_paper_mesh: bool = False
     retouch_paper_embossed: bool = False
+    retouch_light_corners: bool = False
     retouch_output_scale: int = 4
 
 
@@ -87,6 +88,7 @@ def load_settings(session: Session) -> ArchiveSettings:
         retouch_gentle_denoise=_flag(stored.get("retouch_gentle_denoise")),
         retouch_paper_mesh=_flag(stored.get("retouch_paper_mesh")),
         retouch_paper_embossed=_flag(stored.get("retouch_paper_embossed")),
+        retouch_light_corners=_flag(stored.get("retouch_light_corners")),
         retouch_output_scale=2 if stored.get("retouch_output_scale") == "2" else 4,
     )
 
@@ -117,6 +119,7 @@ def save_settings(session: Session, settings: ArchiveSettings) -> None:
         "retouch_gentle_denoise": _format_flag(settings.retouch_gentle_denoise),
         "retouch_paper_mesh": _format_flag(settings.retouch_paper_mesh),
         "retouch_paper_embossed": _format_flag(settings.retouch_paper_embossed),
+        "retouch_light_corners": _format_flag(settings.retouch_light_corners),
         "retouch_output_scale": str(settings.retouch_output_scale),
     }
     for key, value in values.items():
@@ -160,6 +163,7 @@ def seed_settings(session: Session, process: Settings) -> None:
         retouch_gentle_denoise=current.retouch_gentle_denoise,
         retouch_paper_mesh=current.retouch_paper_mesh,
         retouch_paper_embossed=current.retouch_paper_embossed,
+        retouch_light_corners=current.retouch_light_corners,
         retouch_output_scale=current.retouch_output_scale,
     )
     if seeded != current or not session.get(Setting, "output_format"):
@@ -202,6 +206,7 @@ def retouch_columns(settings: ArchiveSettings) -> dict[str, bool | int]:
         "retouch_gentle_denoise": settings.retouch_gentle_denoise,
         "retouch_paper_mesh": settings.retouch_paper_mesh,
         "retouch_paper_embossed": settings.retouch_paper_embossed,
+        "retouch_light_corners": settings.retouch_light_corners,
         "retouch_output_scale": settings.retouch_output_scale,
     }
 

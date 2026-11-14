@@ -68,6 +68,7 @@ describe('BulkRetouchPage', () => {
     const page = fixture.componentInstance;
     page.setStage('contrast', true);
     page.setStage('faces', true);
+    page.setStage('light_corners', true);
     page.setOutputScale('2');
     page.run();
     page.run();
@@ -87,6 +88,7 @@ describe('BulkRetouchPage', () => {
         gentle_denoise: false,
         paper_mesh: false,
         paper_embossed: false,
+        light_corners: true,
         output_scale: 2,
       },
       state: 'all',

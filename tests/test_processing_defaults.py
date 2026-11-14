@@ -17,6 +17,7 @@ PROCESSING_FLAGS = (
     "retouch_gentle_denoise",
     "retouch_paper_mesh",
     "retouch_paper_embossed",
+    "retouch_light_corners",
 )
 
 

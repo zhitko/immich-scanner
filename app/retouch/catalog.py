@@ -160,7 +160,7 @@ CATALOG: dict[str, ModelSpec] = {
         id="inpaint",
         filename="lama.onnx",
         version="big-lama",
-        purpose="Fill scratches and creases",
+        purpose="Fill scratches, creases, and light corner damage",
         license_id="Apache-2.0",
         license_summary=(
             "LaMa, Roman Suvorov and others, Apache-2.0. "
@@ -213,10 +213,13 @@ def specs_for(
     faces: bool,
     colorize: bool,
     scratches: bool,
+    light_corners: bool = False,
 ) -> list[ModelSpec]:
     needed: list[ModelSpec] = []
     if scratches:
         needed.extend((CATALOG["scratch-detection"], CATALOG["inpaint"]))
+    elif light_corners:
+        needed.append(CATALOG["inpaint"])
     if colorize:
         needed.append(CATALOG["colorize"])
     plan = restoration_for(upscale=upscale, denoise=denoise)

@@ -29,6 +29,7 @@ export interface Statistics {
   retouched_gentle_denoise: number;
   retouched_paper_mesh: number;
   retouched_paper_embossed: number;
+  retouched_light_corners: number;
   first_scan_at: string | null;
   latest_scan_at: string | null;
   earliest_photo_at: string | null;
@@ -74,6 +75,7 @@ export interface Region {
   retouch_gentle_denoise: boolean;
   retouch_paper_mesh: boolean;
   retouch_paper_embossed: boolean;
+  retouch_light_corners: boolean;
   retouch_output_scale: 2 | 4;
   upload_source: 'crop' | 'retouch';
   retouch_status: string;
@@ -197,6 +199,7 @@ export interface Settings {
   retouch_gentle_denoise: boolean;
   retouch_paper_mesh: boolean;
   retouch_paper_embossed: boolean;
+  retouch_light_corners: boolean;
   retouch_output_scale: 2 | 4;
 }
 
@@ -274,6 +277,7 @@ export interface RetouchChoice {
   gentle_denoise: boolean;
   paper_mesh: boolean;
   paper_embossed: boolean;
+  light_corners: boolean;
   output_scale: 2 | 4;
 }
 
@@ -309,6 +313,7 @@ export interface RetouchPatch {
   retouch_gentle_denoise?: boolean;
   retouch_paper_mesh?: boolean;
   retouch_paper_embossed?: boolean;
+  retouch_light_corners?: boolean;
   retouch_output_scale?: 2 | 4;
   upload_source?: 'crop' | 'retouch';
 }

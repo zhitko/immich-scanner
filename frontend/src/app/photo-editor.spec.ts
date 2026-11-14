@@ -112,6 +112,25 @@ describe('Photo editor', () => {
     expect(TestBed.inject(Router).url).toBe('/photos?filter=no-date');
   });
 
+  it('saves the light corner repair switch and enables retouch for that step alone', async () => {
+    const harness = await open();
+    const element = harness.routeNativeElement!;
+    const label = [...element.querySelectorAll('label')].find((item) =>
+      item.textContent?.includes('Repair light corners'),
+    );
+    const checkbox = label!.querySelector('input') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    checkbox.click();
+    const save = http.expectOne('/api/scans/scan-1/regions/photo-2');
+    expect(save.request.body).toEqual({ retouch_light_corners: true });
+    const updated = { ...photo, retouch_light_corners: true };
+    save.flush(updated);
+    harness.detectChanges();
+    const editor = harness.routeDebugElement!.componentInstance as EditorPage;
+    expect(editor.retouchChosen(updated)).toBe(true);
+    expect(checkbox.checked).toBe(true);
+  });
+
   it('enables reupload for an already uploaded photo without local changes', async () => {
     const harness = await open({
       ...detail,

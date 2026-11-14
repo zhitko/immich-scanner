@@ -59,6 +59,7 @@ _RETOUCH_FIELDS = {
     "retouch_gentle_denoise",
     "retouch_paper_mesh",
     "retouch_paper_embossed",
+    "retouch_light_corners",
     "retouch_output_scale",
 }
 
@@ -300,6 +301,7 @@ def retouch_region(
     region.retouch_gentle_denoise = body.gentle_denoise
     region.retouch_paper_mesh = body.paper_mesh
     region.retouch_paper_embossed = body.paper_embossed
+    region.retouch_light_corners = body.light_corners
     region.retouch_output_scale = body.output_scale
     region.updated_at = utcnow()
     job = enqueue_job(
@@ -454,6 +456,7 @@ def _apply_patch(scan: Scan, region: Region, body: RegionPatch) -> None:
         "retouch_gentle_denoise",
         "retouch_paper_mesh",
         "retouch_paper_embossed",
+        "retouch_light_corners",
         "retouch_output_scale",
     ):
         if name in fields and getattr(body, name) is not None:

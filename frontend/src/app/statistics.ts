@@ -50,6 +50,7 @@ export class StatisticsPage {
     { key: 'retouched_gentle_denoise', label: 'Gentle denoise' },
     { key: 'retouched_paper_mesh', label: 'Repeating paper texture reduction' },
     { key: 'retouched_paper_embossed', label: 'Embossed paper texture reduction' },
+    { key: 'retouched_light_corners', label: 'Light corner repair' },
     { key: 'retouched_colorize', label: 'Colorize' },
     { key: 'retouched_upscale', label: 'Upscale' },
     { key: 'retouched_denoise', label: 'Denoise' },

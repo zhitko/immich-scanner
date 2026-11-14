@@ -38,6 +38,7 @@ class StatisticsOut(BaseModel):
     retouched_gentle_denoise: int
     retouched_paper_mesh: int
     retouched_paper_embossed: int
+    retouched_light_corners: int
     first_scan_at: datetime | None
     latest_scan_at: datetime | None
     earliest_photo_at: datetime | None
@@ -83,6 +84,7 @@ class RegionOut(BaseModel):
     retouch_gentle_denoise: bool
     retouch_paper_mesh: bool
     retouch_paper_embossed: bool
+    retouch_light_corners: bool
     retouch_output_scale: Literal[2, 4]
     upload_source: Literal["crop", "retouch"]
     retouch_status: str
@@ -190,6 +192,7 @@ class RegionPatch(BaseModel):
     retouch_gentle_denoise: bool | None = None
     retouch_paper_mesh: bool | None = None
     retouch_paper_embossed: bool | None = None
+    retouch_light_corners: bool | None = None
     retouch_output_scale: Literal[2, 4] | None = None
     upload_source: Literal["crop", "retouch"] | None = None
 
@@ -233,6 +236,7 @@ class RetouchRequest(BaseModel):
     gentle_denoise: bool = False
     paper_mesh: bool = False
     paper_embossed: bool = False
+    light_corners: bool = False
     output_scale: Literal[2, 4] = 4
 
     @model_validator(mode="after")
@@ -254,6 +258,7 @@ class RetouchRequest(BaseModel):
                 self.gentle_denoise,
                 self.paper_mesh,
                 self.paper_embossed,
+                self.light_corners,
             )
         ):
             raise ValueError("Choose at least one retouch stage.")
@@ -371,6 +376,7 @@ class SettingsOut(BaseModel):
     retouch_gentle_denoise: bool
     retouch_paper_mesh: bool
     retouch_paper_embossed: bool
+    retouch_light_corners: bool
     retouch_output_scale: Literal[2, 4]
 
 
@@ -400,6 +406,7 @@ class SettingsUpdate(BaseModel):
     retouch_gentle_denoise: bool = False
     retouch_paper_mesh: bool = False
     retouch_paper_embossed: bool = False
+    retouch_light_corners: bool = False
     retouch_output_scale: Literal[2, 4] = 4
 
     @model_validator(mode="after")

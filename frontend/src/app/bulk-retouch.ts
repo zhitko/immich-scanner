@@ -39,6 +39,7 @@ export class BulkRetouchPage {
     gentle_denoise: false,
     paper_mesh: false,
     paper_embossed: false,
+    light_corners: false,
     output_scale: 4,
   });
   readonly stages: {
@@ -51,6 +52,7 @@ export class BulkRetouchPage {
     { key: 'gentle_denoise', label: 'Gentle denoise (native resolution)' },
     { key: 'deblur', label: 'Deblur mild softness' },
     { key: 'scratches', label: 'Fill scratches' },
+    { key: 'light_corners', label: 'Repair light corners' },
     { key: 'color_balance', label: 'Correct color cast' },
     { key: 'contrast', label: 'Restore contrast' },
     { key: 'colorize', label: 'Colorize' },
